@@ -55,7 +55,7 @@ export function CartSheet() {
 
   const handleCheckout = () => {
     // IMPORTANT: Replace with your actual WhatsApp phone number
-    const phoneNumber = "1234567890"; 
+    const phoneNumber = "573165480971"; 
     
     let message = "¡Hola! Quisiera hacer un pedido de los siguientes artículos:\n\n";
     
