@@ -13,8 +13,7 @@ try:
         user=os.getenv('DB_USER'),
         password=os.getenv('DB_PASSWORD'),
         port=int(os.getenv('DB_PORT')),
-        ssl_verify_cert=True,
-        ssl={"ca": "./ca.pem"},
+        ssl_verify_cert=False,
         charset='utf8mb4',
         cursorclass=pymysql.cursors.DictCursor
     )

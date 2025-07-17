@@ -62,8 +62,7 @@ def get_db_connection():
             password=os.getenv('DB_PASSWORD'),
             database=os.getenv('DB_NAME'),
             port=int(os.getenv('DB_PORT')),
-            ssl_verify_cert=True,
-            ssl={"ca": "./ca.pem"},
+            ssl_verify_cert=False,
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor
         )
