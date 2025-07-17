@@ -579,3 +579,5 @@ def generate_invoice_docx():
     finally:
         if conn:
             conn.close()
+
+    
