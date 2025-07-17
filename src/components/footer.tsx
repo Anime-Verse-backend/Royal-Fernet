@@ -22,7 +22,7 @@ export function Footer() {
           <div className="mb-8 md:mb-0">
             <Link href="/" className="flex items-center justify-center md:justify-start space-x-2 mb-4">
               <GlassWater className="h-8 w-8 text-primary" />
-              <span className="text-2xl font-bold font-headline">Royal-Fernet</span>
+              <span className="text-2xl font-bold font-headline">Exotic Fruits</span>
             </Link>
             <p className="text-muted-foreground">Crafting legacies, one tick at a time.</p>
           </div>
