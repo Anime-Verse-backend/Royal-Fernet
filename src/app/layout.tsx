@@ -13,6 +13,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { montserrat } from '@/lib/fonts';
 import { cn } from '@/lib/utils';
 import { AppContent } from './app-content';
+import { Suspense } from 'react';
 
 export default function RootLayout({
   children,
@@ -34,7 +35,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <CartProvider>
-            <AppContent>{children}</AppContent>
+            <Suspense>
+                <AppContent>{children}</AppContent>
+            </Suspense>
             <CustomerServiceWidget />
             <Toaster />
           </CartProvider>
