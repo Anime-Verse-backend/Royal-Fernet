@@ -15,15 +15,34 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  async rewrites() {
+    // En desarrollo y producción, esto redirige las solicitudes del lado del cliente /api/... al backend
+    // Esto evita problemas de CORS.
+    const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    if (!backendUrl) {
+      console.warn('ADVERTENCIA: NEXT_PUBLIC_API_BASE_URL no está configurada. Las reescrituras de API no funcionarán.');
+      return [];
+    }
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${backendUrl}/api/:path*`,
+      },
+       {
+        source: '/uploads/:path*',
+        destination: `${backendUrl}/uploads/:path*`,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'placehold.co',
       },
-      // Add the hostname of your Render backend service here
-      // For example, if your service URL is https://my-backend-123.onrender.com
-      // the hostname would be 'my-backend-123.onrender.com'
+      // Añade el nombre de host de tu servicio backend de Render aquí
+      // Por ejemplo, si la URL de tu servicio es https://mi-backend-123.onrender.com
+      // el nombre de host sería 'mi-backend-123.onrender.com'
       {
         protocol: 'https',
         hostname: '*.onrender.com',

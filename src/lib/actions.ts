@@ -12,9 +12,9 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-// For server-side actions, we use the environment variable for the API URL.
-// This will be set to the Render.com URL in production.
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:5000/api';
+// Para las acciones del lado del servidor, usamos la variable de entorno para la URL de la API.
+// Esta se establecerá a la URL de Render.com en producción.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://exotic-fruits.onrender.com';
 
 export async function loginUser(formData: FormData) {
   const email = formData.get('email');
@@ -26,7 +26,7 @@ export async function loginUser(formData: FormData) {
 
   let res;
   try {
-    res = await fetch(`${API_BASE_URL}/login`, {
+    res = await fetch(`${API_BASE_URL}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -49,7 +49,7 @@ export async function registerUser(formData: FormData) {
   const email = formData.get('email');
   const password = formData.get('password');
   
-  await fetch(`${API_BASE_URL}/register`, {
+  await fetch(`${API_BASE_URL}/api/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password }),
@@ -59,7 +59,7 @@ export async function registerUser(formData: FormData) {
 }
 
 async function proxyFormDataToApi(endpoint: string, method: 'POST' | 'PUT', formData: FormData) {
-  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const res = await fetch(`${API_BASE_URL}/api${endpoint}`, {
     method: method,
     body: formData,
   });
@@ -85,7 +85,7 @@ export async function updateProduct(id: string, formData: FormData) {
 }
 
 export async function deleteProduct(id: string) {
-    const res = await fetch(`${API_BASE_URL}/products/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/api/products/${id}`, {
       method: 'DELETE',
     });
     if (!res.ok) { 
@@ -105,7 +105,7 @@ export async function addAdmin(formData: FormData) {
     password: formData.get('password'),
   };
   
-  const res = await fetch(`${API_BASE_URL}/admins`, {
+  const res = await fetch(`${API_BASE_URL}/api/admins`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(adminData),
@@ -121,7 +121,7 @@ export async function addAdmin(formData: FormData) {
 }
 
 export async function deleteAdmin(id: string) {
-    const res = await fetch(`${API_BASE_URL}/admins/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/api/admins/${id}`, {
       method: 'DELETE',
     });
     if (!res.ok) { 
@@ -136,7 +136,7 @@ export async function deleteAdmin(id: string) {
 
 export async function updateStoreSettings(formData: FormData): Promise<{success: boolean, error?: string}> {
   try {
-      const res = await fetch(`${API_BASE_URL}/settings`, {
+      const res = await fetch(`${API_BASE_URL}/api/settings`, {
         method: 'POST', 
         body: formData,
       });
@@ -172,7 +172,7 @@ export async function sendNotificationAction(formData: FormData): Promise<{succe
   };
   
   try {
-    const res = await fetch(`${API_BASE_URL}/notifications`, {
+    const res = await fetch(`${API_BASE_URL}/api/notifications`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(notificationData),
@@ -190,5 +190,36 @@ export async function sendNotificationAction(formData: FormData): Promise<{succe
   } catch (error) {
     console.error("Error de red al enviar la notificación:", error);
     return { success: false, error: 'Ocurrió un error de red al enviar la notificación.' };
+  }
+}
+
+export async function generateInvoiceDocxAction(customerName: string, items: { productId: string; quantity: number }[]) {
+  const payload = { customerName, items };
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/generate-invoice-docx`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'No se pudo generar la factura.');
+    }
+
+    // Since we cannot return a Blob directly from a server action to trigger a download,
+    // we return the URL to the frontend, which will then trigger the download.
+    // This requires the backend to expose an endpoint that serves the file.
+    // For now, let's assume the frontend will handle the blob.
+    
+    // THIS IS A LIMITATION: Server actions can't directly send files for download.
+    // The current implementation in dashboard/page.tsx that fetches on the client is better.
+    // This function remains as a placeholder for a pure server-side approach if needed later.
+    
+    return { success: true, message: "La generación de la factura se está procesando." };
+    
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 }
