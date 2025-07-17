@@ -7,19 +7,22 @@
  */
 import type { Product, Admin, Notification, StoreSettings } from './definitions';
 
-// Para la obtención de datos del lado del servidor, usa la variable de entorno que apunta a la URL completa de Render.
-// Para la obtención de datos del lado del cliente (en useEffect, etc.), usa una ruta relativa que será manejada por las reescrituras de Vercel.
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://exotic-fruits.onrender.com';
-const CLIENT_API_BASE_URL = ''; // Usado para las peticiones del lado del cliente
+// En el lado del servidor, siempre usamos la variable de entorno que apunta a la URL completa de Render.
+// En el lado del cliente (CSR), la reescritura de Vercel manejará la ruta relativa '/api'.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:5000';
 
-// Ayudante para determinar si estamos en el servidor o en el cliente
-const isServer = typeof window === 'undefined';
+const getBaseUrl = () => {
+    // Si el código se ejecuta en el navegador, usa una ruta relativa.
+    // Si se ejecuta en el servidor, usa la URL completa de la variable de entorno.
+    return typeof window === 'undefined' ? API_BASE_URL : '';
+}
 
 export async function fetchProducts(query?: string): Promise<Product[]> {
-  const baseUrl = isServer ? API_BASE_URL : CLIENT_API_BASE_URL;
+  const baseUrl = getBaseUrl();
   const url = query ? `${baseUrl}/api/products?q=${encodeURIComponent(query)}` : `${baseUrl}/api/products`;
   try {
-    const res = await fetch(url, { next: { revalidate: 60 } });
+    // Usamos 'no-store' para asegurar datos frescos, especialmente en el panel de admin.
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) {
       console.error(`Error al obtener productos: ${res.status} ${res.statusText}`);
       return [];
@@ -34,9 +37,9 @@ export async function fetchProducts(query?: string): Promise<Product[]> {
 }
 
 export async function fetchProductById(id: string): Promise<Product | undefined> {
-  const baseUrl = isServer ? API_BASE_URL : CLIENT_API_BASE_URL;
+  const baseUrl = getBaseUrl();
   try {
-    const res = await fetch(`${baseUrl}/api/products/${id}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${baseUrl}/api/products/${id}`, { cache: 'no-store' });
     if (!res.ok) {
       if (res.status === 404) return undefined;
       console.error(`Error al obtener el producto ${id}: ${res.status} ${res.statusText}`);
@@ -50,7 +53,7 @@ export async function fetchProductById(id: string): Promise<Product | undefined>
 }
 
 export async function fetchAdmins(query?: string): Promise<Admin[]> {
-  const baseUrl = isServer ? API_BASE_URL : CLIENT_API_BASE_URL;
+  const baseUrl = getBaseUrl();
   const url = query ? `${baseUrl}/api/admins?q=${encodeURIComponent(query)}` : `${baseUrl}/api/admins`;
   try {
     const res = await fetch(url, { cache: 'no-store' }); // Los datos de administrador no deben ser cacheados
@@ -66,7 +69,7 @@ export async function fetchAdmins(query?: string): Promise<Admin[]> {
 }
 
 export async function fetchLatestNotification(): Promise<Notification | null> {
-    const baseUrl = isServer ? API_BASE_URL : CLIENT_API_BASE_URL;
+    const baseUrl = getBaseUrl();
     try {
         const res = await fetch(`${baseUrl}/api/notifications/latest`, { cache: 'no-store' });
         if (!res.ok) {
@@ -82,9 +85,10 @@ export async function fetchLatestNotification(): Promise<Notification | null> {
 }
 
 export async function fetchStoreSettings(): Promise<StoreSettings | null> {
-  const baseUrl = isServer ? API_BASE_URL : CLIENT_API_BASE_URL;
+  const baseUrl = getBaseUrl();
   try {
-    const res = await fetch(`${baseUrl}/api/settings`, { next: { revalidate: 60 } });
+    // La configuración puede ser cacheada por más tiempo. Revalidación cada hora.
+    const res = await fetch(`${baseUrl}/api/settings`, { next: { revalidate: 3600 } });
     if (!res.ok) {
       if (res.status === 404) return null; // No encontrado no es un error.
       console.error(`Error al obtener la configuración de la tienda: ${res.status} ${res.statusText}`);

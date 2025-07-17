@@ -74,7 +74,7 @@ def get_db_connection():
 # --- URL Helper ---
 def make_image_url_absolute(base_url, path):
     """Checks if a path is already absolute, otherwise prepends the base_url."""
-    if not path or path.startswith(('http://', 'https://')):
+    if not path or path.startswith(('http://', 'https')):
         return path
     # In production, the base_url for uploads will come from an env var.
     # The request.host_url is not reliable behind proxies like Render's.
@@ -146,17 +146,20 @@ def handle_products():
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
         if request.method == 'POST':
+            # This endpoint now handles multipart/form-data
             image_paths = []
             for i in range(1, 5): 
                 file_key = f'image{i}'
                 url_key = f'imageUrl{i}'
                 
+                # Prioritize uploaded file
                 if file_key in request.files and request.files[file_key].filename != '':
                     file = request.files[file_key]
                     if file and allowed_file(file.filename):
                         filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
                         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                         image_paths.append(f"/uploads/{filename}")
+                # Fallback to URL if provided
                 elif request.form.get(url_key) and request.form.get(url_key).strip():
                     image_paths.append(request.form.get(url_key))
 
@@ -250,6 +253,7 @@ def handle_product(product_id):
                             new_image_paths.append(f"/uploads/{filename}")
                     elif request.form.get(url_key) and request.form.get(url_key).strip():
                         existing_full_url = request.form.get(url_key)
+                        # Convert absolute URL back to relative path for storage
                         if existing_full_url.startswith(api_base_url):
                             relative_path = existing_full_url.replace(api_base_url, '', 1)
                             new_image_paths.append(relative_path)
@@ -272,13 +276,19 @@ def handle_product(product_id):
                 cursor.execute("SELECT images FROM products WHERE id = %s", (product_id,))
                 result = cursor.fetchone()
                 if result and result['images']:
-                    image_paths = json.loads(result['images'])
-                    for path in image_paths:
-                        if path and path.startswith('/uploads/'):
-                            try:
-                                os.remove(os.path.join(app.config['UPLOAD_FOLDER'], path.split('/')[-1]))
-                            except OSError as e:
-                                app.logger.error(f"Error deleting file {path}: {e}")
+                    image_paths_str = result.get('images', '[]')
+                    try:
+                        image_paths = json.loads(image_paths_str)
+                        for path in image_paths:
+                            # Only delete files that were uploaded to our server
+                            if path and path.startswith('/uploads/'):
+                                try:
+                                    os.remove(os.path.join(app.config['UPLOAD_FOLDER'], path.split('/')[-1]))
+                                except OSError as e:
+                                    app.logger.error(f"Error deleting file {path}: {e}")
+                    except (json.JSONDecodeError, TypeError):
+                         app.logger.error(f"Could not parse images JSON for product {product_id}")
+
                 
                 rows_affected = cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
                 if rows_affected == 0:
@@ -286,6 +296,7 @@ def handle_product(product_id):
                 conn.commit()
                 return jsonify({'message': 'Product deleted'}), 200
     except Exception as e:
+        app.logger.error(f"Error in handle_product for {product_id}: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
@@ -440,6 +451,9 @@ def get_latest_notification():
             cursor.execute("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 1")
             notification = cursor.fetchone()
             if notification:
+                base_url = os.getenv('API_BASE_URL', request.host_url)
+                if notification.get('imageUrl'):
+                    notification['imageUrl'] = make_image_url_absolute(base_url, notification['imageUrl'])
                 return jsonify(notification)
             return jsonify({'error': 'No notifications found'}), 404
     except Exception as e:
@@ -560,6 +574,7 @@ def generate_invoice_docx():
     except Exception as e:
         if conn:
             conn.rollback() 
+        app.logger.error(f"Error in generate_invoice_docx: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
         if conn:
