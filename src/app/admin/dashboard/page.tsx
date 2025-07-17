@@ -1,3 +1,4 @@
+
 'use client';
 /**
  * @fileoverview Página del panel de control de administración.
@@ -541,7 +542,7 @@ export default function AdminDashboardPage() {
     const totalProductPages = Math.ceil(products.length / productsPerPage);
 
     if (loading) {
-        return <div className="container mx-auto py-12 px-4 space-y-12"><Skeleton className="h-96 w-full" /></div>
+        return <div className="container mx-auto py-12 px-4 space-y-12"><Skeleton className="h-96 w-full" /></div>;
     }
 
     return (
@@ -905,23 +906,25 @@ export default function AdminDashboardPage() {
                                 <CardDescription>Conoce a las personas detrás de la magia.</CardDescription>
                             </CardHeader>
                             <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
-                                <Card className="flex flex-col items-center p-8 text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
-                  <Avatar className="h-32 w-32 mb-6">
+                                <Card className="flex flex-col items-center p-6 text-center">
+                                    <Avatar className="h-32 w-32 mb-6">
                       <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
-                      <AvatarFallback>JD</AvatarFallback>
-                  </Avatar>
-                  
-                  <h1 className="text-2xl font-semibold">Luis Miguel Fonce</h1>
-                  
-                  <p className="text-primary/80">Lead Full-Stack Developer</p>
-                  <p className="mt-4 text-sm text-muted-foreground flex-grow">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
-                  <div className="flex gap-4 mt-6">
-                      <Link href="https://api.whatsapp.com/send/?phone=573044065668&text=%C2%A1Hola,+Me+interesa+tu+trabajo+amigo" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-6 w-6" /></Link>
-                      <Link href="https://www.instagram.com/miguel_1068l/" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-6 w-6" /></Link>
-                      <Link href="https://www.facebook.com/luismiguel.fonceguaitero?locale=es_LA" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-6 w-6" /></Link>
-                      <Link href="https://github.com/MIGUEL6-BNX" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-6 w-6" /></Link>
-                  </div>
-              </Card>
+                      <AvatarFallback>LF</AvatarFallback>
+                                    </Avatar>
+                                    
+                                    <h1 className="text-2xl font-semibold">Luis Miguel Fonce</h1>
+                                    
+                                    <p className="text-primary/80">Lead Full-Stack Developer</p>
+                                    <p className="mt-4 text-sm text-muted-foreground flex-grow">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
+                                    <div className="flex gap-4 mt-6">
+                                        <Link href="https://api.whatsapp.com/send/?phone=573044065668&text=%C2%A1Hola,+Me+interesa+tu+trabajo+amigo" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-6 w-6" /></Link>
+                                        <Link href="https://www.instagram.com/miguel_1068l/" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-6 w-6" /></Link>
+                                        <Link href="https://www.facebook.com/luismiguel.fonceguaitero?locale=es_LA" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-6 w-6" /></Link>
+                                        <Link href="https://github.com/MIGUEL6-BNX" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-6 w-6" /></Link>
+                                    </div>
+                                </Card>
+                            </CardContent>
+                        </Card>
                         <Card>
                             <CardHeader>
                                 <CardTitle>Stack Tecnológico</CardTitle>
