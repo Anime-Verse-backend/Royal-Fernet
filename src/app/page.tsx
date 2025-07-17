@@ -8,7 +8,7 @@ import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ProductCard } from '@/components/product-card';
+import { ProductCarousel } from '@/components/product-carousel';
 import { fetchProducts, fetchStoreSettings } from '@/lib/data';
 import { MapPin } from 'lucide-react';
 import type { StoreSettings } from '@/lib/definitions';
@@ -32,24 +32,24 @@ const defaultSettings: StoreSettings = {
 
 export default async function Home() {
   const products = await fetchProducts();
-  const featuredProducts = products.filter(p => p.isFeatured).slice(0, 3);
+  const featuredProducts = products.filter(p => p.isFeatured);
   const settings = await fetchStoreSettings();
   const storeInfo = { ...defaultSettings, ...settings };
 
   const getYouTubeId = (url: string | undefined) => {
     if (!url) return null;
     try {
-        const videoUrl = new URL(url);
-        if (videoUrl.hostname === "youtu.be") {
-          return videoUrl.pathname.slice(1);
-        }
-        if (videoUrl.pathname.startsWith('/embed/')) {
-            const pathParts = videoUrl.pathname.split('/');
-            return pathParts[pathParts.length - 1];
-        }
-        return videoUrl.searchParams.get("v");
+      const videoUrl = new URL(url);
+      if (videoUrl.hostname === "youtu.be") {
+        return videoUrl.pathname.slice(1);
+      }
+      if (videoUrl.pathname.startsWith('/embed/')) {
+        const pathParts = videoUrl.pathname.split('/');
+        return pathParts[pathParts.length - 1];
+      }
+      return videoUrl.searchParams.get("v");
     } catch (e) {
-        return null;
+      return null;
     }
   };
   const videoId = getYouTubeId(storeInfo.promoSectionVideoUrl);
@@ -89,11 +89,7 @@ export default async function Home() {
               <p className="text-muted-foreground">{storeInfo.featuredCollectionDescription}</p>
             )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <ProductCarousel products={featuredProducts} />
         </div>
       </section>
 
@@ -118,30 +114,30 @@ export default async function Home() {
           </div>
         </section>
       )}
-      
+
       <section className="py-16 md:py-24 bg-background">
         <div className="container mx-auto px-4 text-center">
-            <MapPin className="h-12 w-12 mx-auto mb-4 text-primary" />
-            <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">{storeInfo.locationSectionTitle}</h2>
-            <p className="text-lg text-muted-foreground mb-2">{storeInfo.address}</p>
-            <p className="text-muted-foreground">{storeInfo.hours}</p>
-             {storeInfo.mapEmbedUrl ? (
-                <div className="mt-8 mx-auto w-full max-w-2xl h-80 rounded-lg overflow-hidden shadow-lg">
-                    <iframe
-                        src={storeInfo.mapEmbedUrl}
-                        width="100%"
-                        height="100%"
-                        style={{ border: 0 }}
-                        allowFullScreen={true}
-                        loading="lazy"
-                        referrerPolicy="no-referrer-when-downgrade"
-                    ></iframe>
-                </div>
-            ) : (
-                <div className="mt-8 w-full h-96 rounded-lg overflow-hidden shadow-lg bg-muted flex items-center justify-center">
-                    <p className="text-muted-foreground">Mapa no disponible</p>
-                </div>
-            )}
+          <MapPin className="h-12 w-12 mx-auto mb-4 text-primary" />
+          <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">{storeInfo.locationSectionTitle}</h2>
+          <p className="text-lg text-muted-foreground mb-2">{storeInfo.address}</p>
+          <p className="text-muted-foreground">{storeInfo.hours}</p>
+          {storeInfo.mapEmbedUrl ? (
+            <div className="mt-8 mx-auto w-full max-w-2xl h-80 rounded-lg overflow-hidden shadow-lg">
+              <iframe
+                src={storeInfo.mapEmbedUrl}
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen={true}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              ></iframe>
+            </div>
+          ) : (
+            <div className="mt-8 w-full h-96 rounded-lg overflow-hidden shadow-lg bg-muted flex items-center justify-center">
+              <p className="text-muted-foreground">Mapa no disponible</p>
+            </div>
+          )}
         </div>
       </section>
     </div>
