@@ -16,13 +16,21 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   async rewrites() {
-    // En desarrollo y producción, esto redirige las solicitudes del lado del cliente /api/... al backend
-    // Esto evita problemas de CORS.
     const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
     if (!backendUrl) {
-      console.warn('ADVERTENCIA: NEXT_PUBLIC_API_BASE_URL no está configurada. Las reescrituras de API no funcionarán.');
-      return [];
+      // En un entorno de desarrollo sin la variable, asumimos que el backend está localmente.
+      return [
+        {
+          source: '/api/:path*',
+          destination: 'http://127.0.0.1:5000/api/:path*',
+        },
+         {
+          source: '/uploads/:path*',
+          destination: 'http://127.0.0.1:5000/uploads/:path*',
+        },
+      ];
     }
+    // En producción, usamos la URL completa del backend de Render.
     return [
       {
         source: '/api/:path*',

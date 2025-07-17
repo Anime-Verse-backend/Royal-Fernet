@@ -21,7 +21,7 @@ export type CartItem = {
 };
 
 export type Admin = {
-  id: string;
+  id: number;
   name: string;
   email: string;
 };

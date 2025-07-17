@@ -14,7 +14,7 @@ import { redirect } from 'next/navigation';
 
 // Para las acciones del lado del servidor, usamos la variable de entorno para la URL de la API.
 // Esta se establecerá a la URL de Render.com en producción.
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://exotic-fruits.onrender.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:5000';
 
 export async function loginUser(formData: FormData) {
   const email = formData.get('email');
@@ -58,16 +58,16 @@ export async function registerUser(formData: FormData) {
   redirect('/login');
 }
 
-async function proxyFormDataToApi(endpoint: string, method: 'POST' | 'PUT', formData: FormData) {
-  const res = await fetch(`${API_BASE_URL}/api${endpoint}`, {
-    method: method,
+export async function addProduct(formData: FormData) {
+  const res = await fetch(`${API_BASE_URL}/api/products`, {
+    method: 'POST',
     body: formData,
   });
   
   if (!res.ok) { 
     const errorText = await res.text();
-    console.error(`Falló al ${method === 'POST' ? 'añadir' : 'actualizar'} el producto`, errorText);
-    return { error: `Falló al ${method === 'POST' ? 'añadir' : 'actualizar'} el producto` }; 
+    console.error(`Falló al añadir el producto`, errorText);
+    return { error: `Falló al añadir el producto` }; 
   }
   
   revalidatePath('/admin/dashboard');
@@ -76,12 +76,23 @@ async function proxyFormDataToApi(endpoint: string, method: 'POST' | 'PUT', form
   redirect('/admin/dashboard');
 }
 
-export async function addProduct(formData: FormData) {
-  return proxyFormDataToApi('/products', 'POST', formData);
-}
-
 export async function updateProduct(id: string, formData: FormData) {
-  return proxyFormDataToApi(`/products/${id}`, 'PUT', formData);
+  const res = await fetch(`${API_BASE_URL}/api/products/${id}`, {
+    method: 'PUT',
+    body: formData,
+  });
+  
+  if (!res.ok) { 
+    const errorText = await res.text();
+    console.error(`Falló al actualizar el producto`, errorText);
+    return { error: `Falló al actualizar el producto` }; 
+  }
+  
+  revalidatePath('/admin/dashboard');
+  revalidatePath('/catalog');
+  revalidatePath('/');
+  revalidatePath(`/product/${id}`);
+  redirect('/admin/dashboard');
 }
 
 export async function deleteProduct(id: string) {
@@ -120,7 +131,7 @@ export async function addAdmin(formData: FormData) {
   redirect('/admin/dashboard');
 }
 
-export async function deleteAdmin(id: string) {
+export async function deleteAdmin(id: number) {
     const res = await fetch(`${API_BASE_URL}/api/admins/${id}`, {
       method: 'DELETE',
     });
@@ -190,36 +201,5 @@ export async function sendNotificationAction(formData: FormData): Promise<{succe
   } catch (error) {
     console.error("Error de red al enviar la notificación:", error);
     return { success: false, error: 'Ocurrió un error de red al enviar la notificación.' };
-  }
-}
-
-export async function generateInvoiceDocxAction(customerName: string, items: { productId: string; quantity: number }[]) {
-  const payload = { customerName, items };
-  
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/generate-invoice-docx`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'No se pudo generar la factura.');
-    }
-
-    // Since we cannot return a Blob directly from a server action to trigger a download,
-    // we return the URL to the frontend, which will then trigger the download.
-    // This requires the backend to expose an endpoint that serves the file.
-    // For now, let's assume the frontend will handle the blob.
-    
-    // THIS IS A LIMITATION: Server actions can't directly send files for download.
-    // The current implementation in dashboard/page.tsx that fetches on the client is better.
-    // This function remains as a placeholder for a pure server-side approach if needed later.
-    
-    return { success: true, message: "La generación de la factura se está procesando." };
-    
-  } catch (error: any) {
-    return { success: false, error: error.message };
   }
 }
