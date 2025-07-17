@@ -41,23 +41,6 @@ export default function DevelopersPage() {
                       <Link href="https://github.com/MIGUEL6-BNX" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-6 w-6" /></Link>
                   </div>
               </Card>
-              <Card className="flex flex-col items-center p-8 text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
-                  <Avatar className="h-32 w-32 mb-6">
-                      <AvatarImage src="https://i.pinimg.com/736x/3d/cc/f3/3dccf36fc2395f71d4543ccd176d11c8.jpg" data-ai-hint="person portrait" alt="Developer 1" />
-                      <AvatarFallback>JD</AvatarFallback>
-                  </Avatar>
-                  
-                  <h1 className="text-2xl font-semibold">Omar payares</h1>
-                  
-                  <p className="text-primary/80">Lead Full-Stack Developer</p>
-                  <p className="mt-4 text-sm text-muted-foreground flex-grow">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
-                  <div className="flex gap-4 mt-6">
-                      <Link href="https://api.whatsapp.com/send/?phone=573044065668&text=%C2%A1Hola,+Me+interesa+tu+trabajo+amigo" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-6 w-6" /></Link>
-                      <Link href="https://www.instagram.com/miguel_1068l/" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-6 w-6" /></Link>
-                      <Link href="https://www.facebook.com/luismiguel.fonceguaitero?locale=es_LA" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-6 w-6" /></Link>
-                      <Link href="https://github.com/MIGUEL6-BNX" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-6 w-6" /></Link>
-                  </div>
-              </Card>
           </div>
       </div>
     </div>
