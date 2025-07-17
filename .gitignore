@@ -1,0 +1,17 @@
+# Archivos de entorno
+.env
+
+# Directorios generados por Next.js
+.next/
+
+# Módulos de Node
+node_modules/
+
+# Archivos de lock
+
+
+# Archivos de carga (si son generados por usuarios)
+uploads/
+
+# Entorno virtual de Python (si aplica)
+venv/
