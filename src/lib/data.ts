@@ -51,7 +51,9 @@ export async function fetchProductById(id: string): Promise<Product | undefined>
 export async function fetchStoreSettings(): Promise<StoreSettings | null> {
   const baseUrl = getBaseUrl();
   try {
-    const res = await fetch(`${baseUrl}/api/settings`, { next: { revalidate: 3600 } });
+    // Use 'no-store' to ensure settings are always fresh. This prevents the issue
+    // where admin changes appear to revert after some time due to caching.
+    const res = await fetch(`${baseUrl}/api/settings`, { cache: 'no-store' });
     if (!res.ok) {
       if (res.status === 404) return null;
       console.error(`Error al obtener la configuración de la tienda: ${res.status} ${res.statusText}`);
