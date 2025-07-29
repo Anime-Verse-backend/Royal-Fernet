@@ -97,7 +97,7 @@ export function Navbar() {
               <SheetContent side="left" className="pr-0">
                 <Link href="/" className="mr-6 flex items-center space-x-2 mb-6">
                   <GlassWater className="h-6 w-6" />
-                  <span className="font-bold font-headline">Exotic-Fruits</span>
+                  <span className="font-bold font-headline">Royal-Fernet</span>
                 </Link>
                 <div className="flex flex-col space-y-3">
                     {navLinks.map((link) => (

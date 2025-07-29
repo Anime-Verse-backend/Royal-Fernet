@@ -7,18 +7,25 @@
  */
 import type { Product, Admin, Notification, StoreSettings } from './definitions';
 
+// Para las llamadas desde el servidor (Server Components, Actions), usamos la URL completa.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:5000';
 
 const getBaseUrl = () => {
+    // Si el código se ejecuta en el navegador, no uses la URL absoluta.
+    // Las reescrituras de Next.js se encargarán de redirigir a /api.
     return typeof window === 'undefined' ? API_BASE_URL : '';
 }
 
-// Public-facing data fetching with revalidation
+// =========================================================================
+//  Funciones para obtener datos públicos (con caché deshabilitado para evitar problemas)
+// =========================================================================
+
 export async function fetchProducts(query?: string): Promise<Product[]> {
   const baseUrl = getBaseUrl();
   const url = query ? `${baseUrl}/api/products?q=${encodeURIComponent(query)}` : `${baseUrl}/api/products`;
   try {
-    const res = await fetch(url, { next: { revalidate: 60 } }); // Revalidate every 60 seconds
+    // Usamos 'no-store' para asegurar que siempre obtenemos los datos más frescos y las URLs de imagen correctas.
+    const res = await fetch(url, { cache: 'no-store' }); 
     if (!res.ok) {
       console.error(`Error al obtener productos: ${res.status} ${res.statusText}`);
       return [];
@@ -35,7 +42,7 @@ export async function fetchProducts(query?: string): Promise<Product[]> {
 export async function fetchProductById(id: string): Promise<Product | undefined> {
   const baseUrl = getBaseUrl();
   try {
-    const res = await fetch(`${baseUrl}/api/products/${id}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${baseUrl}/api/products/${id}`, { cache: 'no-store' });
     if (!res.ok) {
       if (res.status === 404) return undefined;
       console.error(`Error al obtener el producto ${id}: ${res.status} ${res.statusText}`);
@@ -51,8 +58,6 @@ export async function fetchProductById(id: string): Promise<Product | undefined>
 export async function fetchStoreSettings(): Promise<StoreSettings | null> {
   const baseUrl = getBaseUrl();
   try {
-    // Use 'no-store' to ensure settings are always fresh. This prevents the issue
-    // where admin changes appear to revert after some time due to caching.
     const res = await fetch(`${baseUrl}/api/settings`, { cache: 'no-store' });
     if (!res.ok) {
       if (res.status === 404) return null;
@@ -66,7 +71,10 @@ export async function fetchStoreSettings(): Promise<StoreSettings | null> {
   }
 }
 
-// Admin-facing data fetching without cache
+// =========================================================================
+//  Funciones para el panel de administración (siempre sin caché)
+// =========================================================================
+
 export async function fetchAdmins(query?: string): Promise<Admin[]> {
   const baseUrl = getBaseUrl();
   const url = query ? `${baseUrl}/api/admins?q=${encodeURIComponent(query)}` : `${baseUrl}/api/admins`;

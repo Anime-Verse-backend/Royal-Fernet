@@ -17,7 +17,7 @@ export function AdminNavbar() {
         <Link href="/admin/dashboard" className="flex items-center space-x-2">
           <GlassWater className="h-6 w-6 text-primary" />
           <span className="font-bold sm:inline-block font-headline">
-            Exotic Fruits. Admin
+            Royal-Fernet Admin
           </span>
         </Link>
         <nav className="flex items-center gap-2">

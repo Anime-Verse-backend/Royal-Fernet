@@ -13,6 +13,8 @@ import { fetchProducts, fetchStoreSettings } from '@/lib/data';
 import { MapPin } from 'lucide-react';
 import type { StoreSettings } from '@/lib/definitions';
 
+export const revalidate = 0;
+
 // Default settings in case the API fails or has no data
 const defaultSettings: StoreSettings = {
   heroHeadline: "Elegancia Atemporal, Redefinida.",
@@ -39,17 +41,17 @@ export default async function Home() {
   const getYouTubeId = (url: string | undefined) => {
     if (!url) return null;
     try {
-      const videoUrl = new URL(url);
-      if (videoUrl.hostname === "youtu.be") {
-        return videoUrl.pathname.slice(1);
-      }
-      if (videoUrl.pathname.startsWith('/embed/')) {
-        const pathParts = videoUrl.pathname.split('/');
-        return pathParts[pathParts.length - 1];
-      }
-      return videoUrl.searchParams.get("v");
+        const videoUrl = new URL(url);
+        if (videoUrl.hostname === "youtu.be") {
+          return videoUrl.pathname.slice(1);
+        }
+        if (videoUrl.pathname.startsWith('/embed/')) {
+            const pathParts = videoUrl.pathname.split('/');
+            return pathParts[pathParts.length - 1];
+        }
+        return videoUrl.searchParams.get("v");
     } catch (e) {
-      return null;
+        return null;
     }
   };
   const videoId = getYouTubeId(storeInfo.promoSectionVideoUrl);
@@ -114,30 +116,30 @@ export default async function Home() {
           </div>
         </section>
       )}
-
+      
       <section className="py-16 md:py-24 bg-background">
         <div className="container mx-auto px-4 text-center">
-          <MapPin className="h-12 w-12 mx-auto mb-4 text-primary" />
-          <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">{storeInfo.locationSectionTitle}</h2>
-          <p className="text-lg text-muted-foreground mb-2">{storeInfo.address}</p>
-          <p className="text-muted-foreground">{storeInfo.hours}</p>
-          {storeInfo.mapEmbedUrl ? (
-            <div className="mt-8 mx-auto w-full max-w-2xl h-80 rounded-lg overflow-hidden shadow-lg">
-              <iframe
-                src={storeInfo.mapEmbedUrl}
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                allowFullScreen={true}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              ></iframe>
-            </div>
-          ) : (
-            <div className="mt-8 w-full h-96 rounded-lg overflow-hidden shadow-lg bg-muted flex items-center justify-center">
-              <p className="text-muted-foreground">Mapa no disponible</p>
-            </div>
-          )}
+            <MapPin className="h-12 w-12 mx-auto mb-4 text-primary" />
+            <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">{storeInfo.locationSectionTitle}</h2>
+            <p className="text-lg text-muted-foreground mb-2">{storeInfo.address}</p>
+            <p className="text-muted-foreground">{storeInfo.hours}</p>
+             {storeInfo.mapEmbedUrl ? (
+                <div className="mt-8 mx-auto w-full max-w-2xl h-80 rounded-lg overflow-hidden shadow-lg">
+                    <iframe
+                        src={storeInfo.mapEmbedUrl}
+                        width="100%"
+                        height="100%"
+                        style={{ border: 0 }}
+                        allowFullScreen={true}
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                    ></iframe>
+                </div>
+            ) : (
+                <div className="mt-8 w-full h-96 rounded-lg overflow-hidden shadow-lg bg-muted flex items-center justify-center">
+                    <p className="text-muted-foreground">Mapa no disponible</p>
+                </div>
+            )}
         </div>
       </section>
     </div>

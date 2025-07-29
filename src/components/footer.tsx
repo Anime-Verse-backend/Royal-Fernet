@@ -55,7 +55,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-12 pt-8 border-t border-border text-center text-muted-foreground text-sm">
-          <p>&copy; {year} Exotic Fruits. All rights reserved.</p>
+          <p>&copy; {year} Royal-Fernet all rights reserved.</p>
         </div>
       </div>
     </footer>
