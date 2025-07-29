@@ -38,8 +38,8 @@ except locale.Error:
 
 # --- File Upload Configuration ---
 # Use an absolute path for the upload folder to ensure reliability
-APP_ROOT = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_FOLDER = os.path.join(APP_ROOT, 'uploads')
+# In production on Render, this will point to the persistent disk.
+UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads'))
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
