@@ -21,29 +21,8 @@ import {
 } from './ui/sheet';
 import { useCart } from '@/hooks/use-cart';
 import { Separator } from './ui/separator';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getSafeImageUrl } from '@/lib/utils';
 import { Product } from '@/lib/definitions';
-
-const getSafeImageUrl = (url?: string): string => {
-  const placeholder = 'https://placehold.co/64x64.png';
-
-  if (!url || typeof url !== 'string' || !url.trim()) {
-    return placeholder;
-  }
-
-  // Allow relative paths
-  if (url.startsWith('/')) {
-    return url;
-  }
-
-  try {
-    // This will throw an error for invalid URLs
-    new URL(url);
-    return url;
-  } catch (error) {
-    return placeholder;
-  }
-};
 
 
 export function CartSheet() {
@@ -59,7 +38,7 @@ export function CartSheet() {
     // AQUÍ: Reemplaza con tu número de WhatsApp real (incluyendo el código de país).
     // EJEMPLO: 573001234567 (para Colombia)
     // =================================================================
-    const phoneNumber = "YOUR_WHATSAPP_NUMBER_HERE"; 
+    const phoneNumber = "573242934538"; 
     
     let message = "¡Hola! Quisiera hacer un pedido de los siguientes artículos:\n\n";
     

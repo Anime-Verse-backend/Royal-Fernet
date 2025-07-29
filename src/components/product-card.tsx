@@ -11,32 +11,11 @@ import { Product } from '@/lib/definitions';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { AddToCartButton } from './add-to-cart-button';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getSafeImageUrl } from '@/lib/utils';
 
 interface ProductCardProps {
   product: Product;
 }
-
-const getSafeImageUrl = (url?: string): string => {
-  const placeholder = 'https://placehold.co/400x400.png';
-
-  if (!url || typeof url !== 'string' || !url.trim()) {
-    return placeholder;
-  }
-
-  // Allow relative paths
-  if (url.startsWith('/')) {
-    return url;
-  }
-
-  try {
-    // This will throw an error for invalid URLs like 'http://...some text'
-    new URL(url);
-    return url;
-  } catch (error) {
-    return placeholder;
-  }
-};
 
 
 export function ProductCard({ product }: ProductCardProps) {
