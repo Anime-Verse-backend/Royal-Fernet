@@ -56,16 +56,30 @@ def get_db_connection():
     It uses environment variables for configuration.
     """
     try:
-        connection = pymysql.connect(
-            host=os.getenv('DB_HOST'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_NAME'),
-            port=int(os.getenv('DB_PORT')),
-            ssl_verify_cert=False,
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
-        )
+        # The path to the CA certificate for SSL connection.
+        # This is necessary for secure connections to cloud databases like Aiven or Render's.
+        # The file `ca.pem` should be placed in the `backend` directory.
+        ssl_ca_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ca.pem')
+
+        connection_args = {
+            'host': os.getenv('DB_HOST'),
+            'user': os.getenv('DB_USER'),
+            'password': os.getenv('DB_PASSWORD'),
+            'database': os.getenv('DB_NAME'),
+            'port': int(os.getenv('DB_PORT')),
+            'charset': 'utf8mb4',
+            'cursorclass': pymysql.cursors.DictCursor
+        }
+
+        # Use SSL if the CA file exists, which is the expected setup for production.
+        if os.path.exists(ssl_ca_path):
+            connection_args['ssl_ca'] = ssl_ca_path
+            # For some cloud providers, you might need to enforce SSL.
+            # You can add ssl_verify_cert=True if your setup requires it.
+            # For simplicity with Render's setup, we might not verify the cert.
+            connection_args['ssl_verify_cert'] = False
+        
+        connection = pymysql.connect(**connection_args)
         return connection
     except pymysql.MySQLError as e:
         app.logger.error(f"Error connecting to MySQL: {e}")
@@ -74,12 +88,39 @@ def get_db_connection():
 # --- URL Helper ---
 def make_image_url_absolute(base_url, path):
     """Checks if a path is already absolute, otherwise prepends the base_url."""
-    if not path or path.startswith(('http://', 'https')):
+    if not path or path.startswith(('http://', 'https://')):
         return path
     # In production, the base_url for uploads will come from an env var.
     # The request.host_url is not reliable behind proxies like Render's.
     api_base = os.getenv('API_BASE_URL', request.host_url)
     return f"{api_base.rstrip('/')}{path}"
+
+# Helper to process images. In a production environment with a CDN, this logic would change.
+# For now, it returns a relative path for local development and an absolute one for production.
+def process_image_paths(image_paths_json, is_production_env):
+    """Processes image paths, returning relative paths for dev and absolute for prod."""
+    product_images = []
+    if not image_paths_json or not isinstance(image_paths_json, str):
+        return product_images
+
+    try:
+        image_paths = json.loads(image_paths_json)
+        valid_paths = [p for p in image_paths if p]
+        
+        if is_production_env:
+            base_url = os.getenv('API_BASE_URL')
+            if not base_url:
+                app.logger.warning("API_BASE_URL not set in a production environment. Image URLs may be incorrect.")
+                return valid_paths # Fallback to relative paths
+            product_images = [make_image_url_absolute(base_url, path) for path in valid_paths]
+        else:
+            # For development, always return relative paths so the Next.js proxy can handle them.
+            product_images = valid_paths
+    except (json.JSONDecodeError, TypeError):
+        app.logger.error(f"Could not parse images JSON: {image_paths_json}")
+
+    return product_images
+
 
 # --- API Routes ---
 
@@ -142,6 +183,7 @@ def login_user():
 
 @app.route('/api/products', methods=['GET', 'POST'])
 def handle_products():
+    is_prod = os.getenv('FLASK_ENV') == 'production' or os.getenv('API_BASE_URL')
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
@@ -195,17 +237,8 @@ def handle_products():
             else:
                 cursor.execute("SELECT * FROM products")
             products = cursor.fetchall()
-            base_url = os.getenv('API_BASE_URL', request.host_url)
             for product in products:
-                product_images = []
-                if 'images' in product and isinstance(product['images'], str):
-                    try:
-                        image_paths = json.loads(product['images'])
-                        valid_paths = [p for p in image_paths if p]
-                        product_images = [make_image_url_absolute(base_url, path) for path in valid_paths]
-                    except (json.JSONDecodeError, TypeError):
-                        pass 
-                product['images'] = product_images
+                product['images'] = process_image_paths(product.get('images'), is_prod)
             return jsonify(products)
     except Exception as e:
         app.logger.error(f"Error handling products: {e}")
@@ -216,6 +249,7 @@ def handle_products():
 
 @app.route('/api/products/<string:product_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_product(product_id):
+    is_prod = os.getenv('FLASK_ENV') == 'production' or os.getenv('API_BASE_URL')
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
@@ -224,16 +258,7 @@ def handle_product(product_id):
                 cursor.execute("SELECT * FROM products WHERE id = %s", (product_id,))
                 product = cursor.fetchone()
                 if product:
-                    base_url = os.getenv('API_BASE_URL', request.host_url)
-                    product_images = []
-                    if 'images' in product and isinstance(product['images'], str):
-                        try:
-                            image_paths = json.loads(product['images'])
-                            valid_paths = [p for p in image_paths if p]
-                            product_images = [make_image_url_absolute(base_url, path) for path in valid_paths]
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-                    product['images'] = product_images
+                    product['images'] = process_image_paths(product.get('images'), is_prod)
                     return jsonify(product)
                 return jsonify({'error': 'Product not found'}), 404
 
@@ -360,6 +385,7 @@ def handle_admin(admin_id):
 
 @app.route('/api/settings', methods=['GET', 'POST'])
 def handle_settings():
+    is_prod = os.getenv('FLASK_ENV') == 'production' or os.getenv('API_BASE_URL')
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
@@ -402,9 +428,9 @@ def handle_settings():
                 cursor.execute("SELECT * FROM settings WHERE id = 1")
                 settings = cursor.fetchone()
                 if settings:
-                    base_url = os.getenv('API_BASE_URL', request.host_url)
                     if settings.get('mainImageUrl'):
-                        settings['mainImageUrl'] = make_image_url_absolute(base_url, settings.get('mainImageUrl'))
+                         if is_prod:
+                            settings['mainImageUrl'] = make_image_url_absolute(os.getenv('API_BASE_URL'), settings.get('mainImageUrl'))
                     return jsonify(settings)
                 return jsonify(data), 200
 
@@ -415,9 +441,9 @@ def handle_settings():
                               FROM settings WHERE id = 1""")
             settings = cursor.fetchone()
             if settings:
-                base_url = os.getenv('API_BASE_URL', request.host_url)
                 if settings.get('mainImageUrl'):
-                    settings['mainImageUrl'] = make_image_url_absolute(base_url, settings['mainImageUrl'])
+                    if is_prod:
+                        settings['mainImageUrl'] = make_image_url_absolute(os.getenv('API_BASE_URL'), settings['mainImageUrl'])
                 return jsonify(settings)
             return jsonify({}), 404 
     except Exception as e:
@@ -444,6 +470,7 @@ def create_notification():
 
 @app.route('/api/notifications/latest', methods=['GET'])
 def get_latest_notification():
+    is_prod = os.getenv('FLASK_ENV') == 'production' or os.getenv('API_BASE_URL')
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
@@ -451,9 +478,8 @@ def get_latest_notification():
             cursor.execute("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 1")
             notification = cursor.fetchone()
             if notification:
-                base_url = os.getenv('API_BASE_URL', request.host_url)
-                if notification.get('imageUrl'):
-                    notification['imageUrl'] = make_image_url_absolute(base_url, notification['imageUrl'])
+                if notification.get('imageUrl') and is_prod:
+                    notification['imageUrl'] = make_image_url_absolute(os.getenv('API_BASE_URL'), notification['imageUrl'])
                 return jsonify(notification)
             return jsonify({'error': 'No notifications found'}), 404
     except Exception as e:

@@ -13,7 +13,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:5
 const getBaseUrl = () => {
     // Si el código se ejecuta en el navegador, no uses la URL absoluta.
     // Las reescrituras de Next.js se encargarán de redirigir a /api.
-    return typeof window === 'undefined' ? API_BASE_URL : '';
+    if (typeof window !== 'undefined') {
+        return '';
+    }
+    // Si el código se ejecuta en el servidor, usa la URL absoluta.
+    return API_BASE_URL;
 }
 
 // =========================================================================
