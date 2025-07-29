@@ -23,7 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn(montserrat.variable)} suppressHydrationWarning>
       <head>
-        <title>Exotic-Fruits</title>
+        <title>Royal-Fernet</title>
         <meta name="description" content="Discover our collection of luxury watches. Timeless elegance and precision craftsmanship." />
         <meta name="keywords" content="watches, luxury watches, Royal-Fernet, timepieces" />
       </head>
