@@ -54,8 +54,11 @@ export function CartSheet() {
   }, []);
 
   const handleCheckout = () => {
-    // IMPORTANT: Replace with your actual WhatsApp phone number
-    const phoneNumber = "573165480971"; 
+    // =================================================================
+    // AQUÍ: Reemplaza con tu número de WhatsApp real (incluyendo el código de país).
+    // EJEMPLO: 573001234567 (para Colombia)
+    // =================================================================
+    const phoneNumber = "YOUR_WHATSAPP_NUMBER_HERE"; 
     
     let message = "¡Hola! Quisiera hacer un pedido de los siguientes artículos:\n\n";
     
@@ -68,6 +71,7 @@ export function CartSheet() {
         
         message += `*${item.product.name}*\n`;
         message += `(Ref: ${item.product.id})\n`;
+        message += `Imagen: ${item.product.images[0]}\n`;
         message += `Cantidad: ${item.quantity}\n`;
         message += `Subtotal: ${formatCurrency(totalItemPrice)}\n\n`;
     });

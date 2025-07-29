@@ -69,7 +69,7 @@ export function Navbar() {
           <Link href="/" className="mr-6 flex items-center space-x-2">
             <GlassWater className="h-6 w-6" />
             <span className="hidden font-bold sm:inline-block font-headline">
-              Exotic-Fruits.
+              Royal-Fernet
             </span>
           </Link>
           <nav className="flex items-center space-x-6 text-sm font-medium">

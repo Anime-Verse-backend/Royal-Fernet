@@ -546,14 +546,14 @@ def generate_invoice_docx():
             row_cells = table.add_row().cells
             row_cells[0].text = item['name']
             row_cells[1].text = str(item['quantity'])
-            row_cells[2].text = locale.currency(item['unit_price'], grouping=True)
-            row_cells[3].text = locale.currency(item['subtotal'], grouping=True)
+            row_cells[2].text = locale.currency(item['unit_price'], grouping=True, symbol=True)
+            row_cells[3].text = locale.currency(item['subtotal'], grouping=True, symbol=True)
 
         p_total = document.add_paragraph()
         p_total.alignment = 2 
         run_total_label = p_total.add_run('TOTAL A PAGAR: ')
         run_total_label.bold = True
-        run_total_value = p_total.add_run(locale.currency(grand_total, grouping=True))
+        run_total_value = p_total.add_run(locale.currency(grand_total, grouping=True, symbol=True))
         run_total_value.bold = True
 
         document.add_heading('Detalles de la Tienda', level=1)
