@@ -22,6 +22,7 @@ import {
 import { useCart } from '@/hooks/use-cart';
 import { Separator } from './ui/separator';
 import { formatCurrency } from '@/lib/utils';
+import { Product } from '@/lib/definitions';
 
 const getSafeImageUrl = (url?: string): string => {
   const placeholder = 'https://placehold.co/64x64.png';
@@ -84,6 +85,14 @@ export function CartSheet() {
     window.open(whatsappUrl, '_blank');
     clearCart();
   };
+  
+  const calculateItemTotal = (product: Product, quantity: number) => {
+    const price = Number(product.price);
+    const discountedPrice = product.discount && product.discount > 0
+      ? price - (price * product.discount) / 100
+      : price;
+    return discountedPrice * quantity;
+  }
 
   const itemCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
@@ -129,8 +138,8 @@ export function CartSheet() {
                       height={64}
                       className="rounded-md object-cover"
                     />
-                    <div className="flex-1">
-                      <p className="font-medium">{product.name}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{product.name}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(product.id, quantity - 1)}>
                             <Minus className="h-3 w-3" />
@@ -141,8 +150,8 @@ export function CartSheet() {
                         </Button>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end">
-                      <p className="font-semibold">{formatCurrency(Number(product.price) * quantity)}</p>
+                    <div className="flex flex-col items-end space-y-1">
+                      <p className="font-semibold">{formatCurrency(calculateItemTotal(product, quantity))}</p>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => removeFromCart(product.id)}>
                         <X className="h-4 w-4" />
                       </Button>
