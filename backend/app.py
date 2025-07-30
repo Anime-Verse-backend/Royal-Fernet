@@ -542,7 +542,7 @@ def generate_invoice_docx():
 
         invoice_number = f"INV-{int(datetime.now().timestamp())}"
         
-        qr_url = os.getenv('FRONTEND_URL', request.host_url)
+        qr_url = "https://royal-fernet.vercel.app"
         qr_img = qrcode.make(qr_url)
         qr_io = io.BytesIO()
         qr_img.save(qr_io, 'PNG')
@@ -610,4 +610,5 @@ def generate_invoice_docx():
 
     
 
+    
     
