@@ -27,14 +27,16 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:9002')
 CORS(app, resources={r"/api/*": {"origins": FRONTEND_URL}})
 
 
-# Set locale for currency formatting
-try:
-    locale.setlocale(locale.LC_ALL, 'es_CO.UTF-8')
-except locale.Error:
+# Helper function to format currency manually, avoiding locale issues on servers.
+def format_colombian_pesos(amount):
+    """Formats a number as Colombian Pesos (COP) currency string."""
     try:
-        locale.setlocale(locale.LC_ALL, 'Spanish_Colombia.1252')
-    except locale.Error:
-        print("Warning: Colombian locale not found. Using default for currency formatting.")
+        # Convert to float, format with thousand separators, and remove decimals
+        formatted_amount = f"${int(amount):,}".replace(",", ".")
+        return formatted_amount
+    except (ValueError, TypeError):
+        return str(amount)
+
 
 # --- File Upload Configuration ---
 # Use an absolute path for the upload folder to ensure reliability
@@ -572,14 +574,14 @@ def generate_invoice_docx():
             row_cells = table.add_row().cells
             row_cells[0].text = item['name']
             row_cells[1].text = str(item['quantity'])
-            row_cells[2].text = locale.currency(item['unit_price'], grouping=True, symbol=True)
-            row_cells[3].text = locale.currency(item['subtotal'], grouping=True, symbol=True)
+            row_cells[2].text = format_colombian_pesos(item['unit_price'])
+            row_cells[3].text = format_colombian_pesos(item['subtotal'])
 
         p_total = document.add_paragraph()
         p_total.alignment = 2 
         run_total_label = p_total.add_run('TOTAL A PAGAR: ')
         run_total_label.bold = True
-        run_total_value = p_total.add_run(locale.currency(grand_total, grouping=True, symbol=True))
+        run_total_value = p_total.add_run(format_colombian_pesos(grand_total))
         run_total_value.bold = True
 
         document.add_heading('Detalles de la Tienda', level=1)
@@ -605,5 +607,7 @@ def generate_invoice_docx():
     finally:
         if conn:
             conn.close()
+
+    
 
     
