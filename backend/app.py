@@ -25,6 +25,13 @@ CORS(app, resources={r"/*": {"origins": FRONTEND_URL, "supports_credentials": Tr
 
 # --- Database Connection Helper ---
 def get_db_connection():
+    # Aiven requires SSL, so we need to specify the CA certificate
+    ssl_args = {}
+    ca_path = os.path.join(os.path.dirname(__file__), 'ca.pem')
+    if os.path.exists(ca_path):
+        ssl_args['ssl_ca'] = ca_path
+        ssl_args['ssl_verify_cert'] = True
+
     try:
         connection = pymysql.connect(
             host=os.getenv('DB_HOST'),
@@ -33,7 +40,8 @@ def get_db_connection():
             database=os.getenv('DB_NAME'),
             port=int(os.getenv('DB_PORT', 3306)),
             charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
+            cursorclass=pymysql.cursors.DictCursor,
+            **ssl_args
         )
         return connection
     except pymysql.MySQLError as e:

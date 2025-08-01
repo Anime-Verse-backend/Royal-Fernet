@@ -10,13 +10,21 @@ load_dotenv()
 
 # --- Database Connection ---
 def get_db_connection():
+    # Aiven requires SSL, so we need to specify the CA certificate
+    ssl_args = {}
+    ca_path = os.path.join(os.path.dirname(__file__), 'ca.pem')
+    if os.path.exists(ca_path):
+        ssl_args['ssl_ca'] = ca_path
+        ssl_args['ssl_verify_cert'] = True
+        
     try:
         connection = pymysql.connect(
             host=os.getenv('DB_HOST'),
             user=os.getenv('DB_USER'),
             password=os.getenv('DB_PASSWORD'),
             charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
+            cursorclass=pymysql.cursors.DictCursor,
+            **ssl_args
         )
         return connection
     except pymysql.MySQLError as e:
