@@ -12,8 +12,18 @@ load_dotenv()
 def get_db_connection():
     # Aiven requires SSL, so we need to specify the CA certificate
     ssl_args = {}
-    ca_path = os.path.join(os.path.dirname(__file__), 'ca.pem')
-    if os.path.exists(ca_path):
+    # Render's Secret Files are mounted at /etc/secrets
+    render_ca_path = '/etc/secrets/ca.pem'
+    local_ca_path = os.path.join(os.path.dirname(__file__), 'ca.pem')
+
+    if os.path.exists(render_ca_path):
+        ca_path = render_ca_path
+    elif os.path.exists(local_ca_path):
+        ca_path = local_ca_path
+    else:
+        ca_path = None
+    
+    if ca_path:
         ssl_args['ssl_ca'] = ca_path
         ssl_args['ssl_verify_cert'] = True
         
