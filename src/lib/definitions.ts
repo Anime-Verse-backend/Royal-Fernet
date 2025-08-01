@@ -9,9 +9,9 @@ export type Product = {
   description: string;
   price: number;
   images: string[];
-  discount?: number; // Porcentaje de descuento opcional
+  discount?: number;
   category: string;
-  isFeatured?: boolean; // Para destacar productos relevantes
+  is_featured: boolean; // Corregido de isFeatured
   stock: number;
 };
 
@@ -27,39 +27,42 @@ export type Admin = {
 };
 
 export type Notification = {
-  id: string;
+  id: number;
   message: string;
   imageUrl?: string;
   linkUrl?: string;
-  createdAt: string; // ISO date string
+  created_at: string;
+};
+
+export type HeroSlide = {
+  id: string;
+  headline: string;
+  subheadline: string;
+  buttonText: string;
+  imageUrl: string;
 };
 
 export type StoreSettings = {
-  // Hero Section
-  heroHeadline: string;
-  heroSubheadline: string;
-  heroButtonText: string;
-  mainImageUrl: string;
-  
-  // Featured Collection
+  heroImages: HeroSlide[];
   featuredCollectionTitle: string;
   featuredCollectionDescription?: string;
-
-  // Promo Section (Deluxe)
   promoSectionTitle?: string;
   promoSectionDescription?: string;
   promoSectionVideoUrl?: string;
-
-  // Location Section
-  locationSectionTitle: string;
-  address: string;
-  hours: string;
-  mapEmbedUrl?: string;
-  
-  // Footer/Contact info
   phone?: string;
   contactEmail?: string;
   twitterUrl?: string;
   instagramUrl?: string;
   facebookUrl?: string;
 };
+
+export interface StoreLocation {
+  id: number;
+  name: string;
+  address: string;
+  city: string;
+  phone: string;
+  hours: string;
+  mapEmbedUrl: string;
+  imageUrl: string;
+}

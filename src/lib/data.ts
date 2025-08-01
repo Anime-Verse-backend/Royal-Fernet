@@ -5,7 +5,7 @@
  * Define funciones asíncronas para buscar todos los productos, administradores o un producto
  * específico por su ID.
  */
-import type { Product, Admin, Notification, StoreSettings } from './definitions';
+import type { Product, Admin, Notification, StoreSettings, StoreLocation } from './definitions';
 
 // Para las llamadas desde el servidor (Server Components, Actions), usamos la URL completa.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:5000';
@@ -28,14 +28,13 @@ export async function fetchProducts(query?: string): Promise<Product[]> {
   const baseUrl = getBaseUrl();
   const url = query ? `${baseUrl}/api/products?q=${encodeURIComponent(query)}` : `${baseUrl}/api/products`;
   try {
-    // Usamos 'no-store' para asegurar que siempre obtenemos los datos más frescos y las URLs de imagen correctas.
     const res = await fetch(url, { cache: 'no-store' }); 
     if (!res.ok) {
       console.error(`Error al obtener productos: ${res.status} ${res.statusText}`);
       return [];
     }
     let products: Product[] = await res.json();
-    products.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
+    products.sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0));
     return products;
   } catch (error) {
     console.error('Error de red al obtener productos:', error);
@@ -74,6 +73,22 @@ export async function fetchStoreSettings(): Promise<StoreSettings | null> {
     return null;
   }
 }
+
+export async function fetchStores(): Promise<StoreLocation[]> {
+  const baseUrl = getBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/api/stores`, { cache: 'no-store' });
+    if (!res.ok) {
+      console.error(`Error al obtener tiendas: ${res.status} ${res.statusText}`);
+      return [];
+    }
+    return await res.json();
+  } catch (error) {
+    console.error('Error de red al obtener tiendas:', error);
+    return [];
+  }
+}
+
 
 // =========================================================================
 //  Funciones para el panel de administración (siempre sin caché)

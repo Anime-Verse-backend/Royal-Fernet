@@ -2,45 +2,38 @@
 import os
 import uuid
 import json
-import pymysql
 import io
 import qrcode
 from docx import Document
 from docx.shared import Inches
-from flask import send_file, send_from_directory
+from flask import send_file, send_from_directory, request, jsonify
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
+from flask import Flask
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
-import locale
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 # --- App Initialization ---
 load_dotenv()
 app = Flask(__name__)
 
 # --- CORS Configuration ---
-# Load the frontend URL from environment variables.
-# For local development, it will fall back to the default Next.js port.
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:9002')
-CORS(app, resources={r"/api/*": {"origins": FRONTEND_URL}})
+CORS(app, resources={r"/api/*": {"origins": FRONTEND_URL, "supports_credentials": True}})
 
+# --- SQLAlchemy Configuration ---
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Helper function to format currency manually, avoiding locale issues on servers.
-def format_colombian_pesos(amount):
-    """Formats a number as Colombian Pesos (COP) currency string."""
-    try:
-        # Convert to float, format with thousand separators, and remove decimals
-        formatted_amount = f"${int(amount):,}".replace(",", ".")
-        return formatted_amount
-    except (ValueError, TypeError):
-        return str(amount)
+db = SQLAlchemy(app)
 
+# Import models after db is initialized to avoid circular imports
+from models import User, Product, Setting, Notification, StoreLocation
 
 # --- File Upload Configuration ---
-# Use an absolute path for the upload folder to ensure reliability
-# In production on Render, this will point to the persistent disk.
 UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads'))
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -51,78 +44,34 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- Database Connection Helper ---
-def get_db_connection():
-    """
-    Establishes a connection to the MySQL database.
-    It uses environment variables for configuration.
-    """
-    try:
-        # The path to the CA certificate for SSL connection.
-        # This is necessary for secure connections to cloud databases like Aiven or Render's.
-        # The file `ca.pem` should be placed in the `backend` directory.
-        ssl_ca_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ca.pem')
-
-        connection_args = {
-            'host': os.getenv('DB_HOST'),
-            'user': os.getenv('DB_USER'),
-            'password': os.getenv('DB_PASSWORD'),
-            'database': os.getenv('DB_NAME'),
-            'port': int(os.getenv('DB_PORT')),
-            'charset': 'utf8mb4',
-            'cursorclass': pymysql.cursors.DictCursor
-        }
-
-        # Use SSL if the CA file exists, which is the expected setup for production.
-        if os.path.exists(ssl_ca_path):
-            connection_args['ssl_ca'] = ssl_ca_path
-            # For some cloud providers, you might need to enforce SSL.
-            # You can add ssl_verify_cert=True if your setup requires it.
-            # For simplicity with Render's setup, we might not verify the cert.
-            connection_args['ssl_verify_cert'] = False
-        
-        connection = pymysql.connect(**connection_args)
-        return connection
-    except pymysql.MySQLError as e:
-        app.logger.error(f"Error connecting to MySQL: {e}")
-        return None
-
-# --- URL Helper ---
-def make_image_url_absolute(base_url, path):
-    """Checks if a path is already absolute, otherwise prepends the base_url."""
+# --- Helper Functions ---
+def make_image_url_absolute(path):
     if not path or path.startswith(('http://', 'https://')):
         return path
-    # In production, the base_url for uploads will come from an env var.
-    # The request.host_url is not reliable behind proxies like Render's.
     api_base = os.getenv('API_BASE_URL', request.host_url)
     return f"{api_base.rstrip('/')}{path}"
 
-# Helper to process images. In a production environment with a CDN, this logic would change.
-# For now, it returns a relative path for local development and an absolute one for production.
-def process_image_paths(image_paths_json, is_production_env):
-    """Processes image paths, returning relative paths for dev and absolute for prod."""
-    product_images = []
-    if not image_paths_json or not isinstance(image_paths_json, str):
-        return product_images
-
+def process_image_paths(image_paths_json):
+    if not image_paths_json:
+        return []
+    
+    is_prod_env = os.getenv('API_BASE_URL') is not None
+    
     try:
-        image_paths = json.loads(image_paths_json)
-        valid_paths = [p for p in image_paths if p]
-        
-        if is_production_env:
-            base_url = os.getenv('API_BASE_URL')
-            if not base_url:
-                app.logger.warning("API_BASE_URL not set in a production environment. Image URLs may be incorrect.")
-                return valid_paths # Fallback to relative paths
-            product_images = [make_image_url_absolute(base_url, path) for path in valid_paths]
-        else:
-            # For development, always return relative paths so the Next.js proxy can handle them.
-            product_images = valid_paths
+        image_paths = json.loads(image_paths_json) if isinstance(image_paths_json, str) else image_paths_json
+        if is_prod_env:
+            return [make_image_url_absolute(path) for path in image_paths if path]
+        return [path for path in image_paths if path]
     except (json.JSONDecodeError, TypeError):
         app.logger.error(f"Could not parse images JSON: {image_paths_json}")
+        return []
 
-    return product_images
-
+def format_colombian_pesos(amount):
+    try:
+        # Format without decimals, using dots for thousands
+        return f"${int(amount):,}".replace(",", ".")
+    except (ValueError, TypeError):
+        return str(amount)
 
 # --- API Routes ---
 
@@ -133,413 +82,434 @@ def uploaded_file(filename):
 @app.route('/api/register', methods=['POST'])
 def register_user():
     data = request.get_json()
-    name = data.get('name')
-    email = data.get('email')
-    password = data.get('password')
-
-    if not all([name, email, password]):
+    if not data or not data.get('name') or not data.get('email') or not data.get('password'):
         return jsonify({'error': 'Missing required fields'}), 400
 
-    hashed_password = generate_password_hash(password)
-    
-    conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
+    hashed_password = generate_password_hash(data['password'])
+    new_user = User(name=data['name'], email=data['email'], password_hash=hashed_password, role='user')
+
     try:
-        with conn.cursor() as cursor:
-            sql = "INSERT INTO users (name, email, password_hash, role) VALUES (%s, %s, %s, %s)"
-            cursor.execute(sql, (name, email, hashed_password, 'user'))
-        conn.commit()
+        db.session.add(new_user)
+        db.session.commit()
         return jsonify({'message': 'User registered successfully'}), 201
-    except pymysql.IntegrityError:
+    except IntegrityError:
+        db.session.rollback()
         return jsonify({'error': 'Email already exists'}), 409
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        app.logger.error(f"Database error on user registration: {e}")
+        return jsonify({'error': 'Database error'}), 500
 
 @app.route('/api/login', methods=['POST'])
 def login_user():
     data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
-
-    if not email or not password:
+    if not data or not data.get('email') or not data.get('password'):
         return jsonify({'error': 'Email and password are required'}), 400
 
-    conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
-            sql = "SELECT * FROM users WHERE email = %s AND role = 'admin'"
-            cursor.execute(sql, (email,))
-            user = cursor.fetchone()
-
-            if user and check_password_hash(user['password_hash'], password):
-                return jsonify({'message': 'Login successful', 'user': {'name': user['name'], 'email': user['email']}}), 200
-            else:
-                return jsonify({'error': 'Invalid credentials or not an admin'}), 401
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
+        user = User.query.filter_by(email=data['email'], role='admin').first()
+        if user and check_password_hash(user.password_hash, data['password']):
+            return jsonify({'message': 'Login successful', 'user': {'name': user.name, 'email': user.email}}), 200
+        else:
+            return jsonify({'error': 'Invalid credentials or not an admin'}), 401
+    except SQLAlchemyError as e:
+        app.logger.error(f"Database error on login: {e}")
+        return jsonify({'error': 'Database error'}), 500
 
 @app.route('/api/products', methods=['GET', 'POST'])
 def handle_products():
-    is_prod = os.getenv('FLASK_ENV') == 'production' or os.getenv('API_BASE_URL')
-    conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
-    try:
-        if request.method == 'POST':
-            # This endpoint now handles multipart/form-data
+    if request.method == 'POST':
+        try:
             image_paths = []
-            for i in range(1, 5): 
+            for i in range(1, 5):
                 file_key = f'image{i}'
                 url_key = f'imageUrl{i}'
                 
-                # Prioritize uploaded file
                 if file_key in request.files and request.files[file_key].filename != '':
                     file = request.files[file_key]
                     if file and allowed_file(file.filename):
                         filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
                         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                         image_paths.append(f"/uploads/{filename}")
-                # Fallback to URL if provided
-                elif request.form.get(url_key) and request.form.get(url_key).strip():
+                elif request.form.get(url_key):
                     image_paths.append(request.form.get(url_key))
-
-            product = {
-                'id': str(uuid.uuid4()),
-                'name': request.form.get('name'),
-                'description': request.form.get('description'),
-                'category': request.form.get('category'),
-                'price': request.form.get('price'),
-                'discount': request.form.get('discount', 0),
-                'stock': request.form.get('stock', 100),
-                'images': json.dumps(image_paths), 
-                'is_featured': request.form.get('isFeatured') == 'on'
-            }
-
-            with conn.cursor() as cursor:
-                sql = """INSERT INTO products (id, name, description, category, price, discount, stock, images, is_featured) 
-                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-                cursor.execute(sql, tuple(product.values()))
-            conn.commit()
             
-            product_response = product.copy()
-            product_response['images'] = image_paths 
-            return jsonify(product_response), 201
-        
-        # --- GET request ---
-        query = request.args.get('q')
-        with conn.cursor() as cursor:
-            if query:
-                sql = "SELECT * FROM products WHERE name LIKE %s OR category LIKE %s"
-                search_term = f"%{query}%"
-                cursor.execute(sql, (search_term, search_term))
-            else:
-                cursor.execute("SELECT * FROM products")
-            products = cursor.fetchall()
-            for product in products:
-                product['images'] = process_image_paths(product.get('images'), is_prod)
-            return jsonify(products)
-    except Exception as e:
-        app.logger.error(f"Error handling products: {e}")
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
+            new_product = Product(
+                id=str(uuid.uuid4()),
+                name=request.form.get('name'),
+                description=request.form.get('description'),
+                category=request.form.get('category'),
+                price=request.form.get('price'),
+                discount=request.form.get('discount', 0),
+                stock=request.form.get('stock', 100),
+                images=json.dumps(image_paths),
+                is_featured=request.form.get('isFeatured') == 'on'
+            )
+            db.session.add(new_product)
+            db.session.commit()
+            
+            response_data = new_product.to_dict()
+            response_data['images'] = process_image_paths(response_data['images'])
+            return jsonify(response_data), 201
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            app.logger.error(f"Error creating product: {e}")
+            return jsonify({'error': 'Database error while creating product'}), 500
+        except Exception as e:
+            app.logger.error(f"Unexpected error creating product: {e}")
+            return jsonify({'error': str(e)}), 500
 
+    # --- GET Products ---
+    try:
+        query = request.args.get('q')
+        if query:
+            search_term = f"%{query}%"
+            products_query = Product.query.filter(
+                db.or_(Product.name.ilike(search_term), Product.category.ilike(search_term))
+            )
+        else:
+            products_query = Product.query
+        
+        products = products_query.order_by(Product.created_at.desc()).all()
+        products_list = []
+        for p in products:
+            p_dict = p.to_dict()
+            p_dict['images'] = process_image_paths(p_dict['images'])
+            products_list.append(p_dict)
+        return jsonify(products_list)
+    except SQLAlchemyError as e:
+        app.logger.error(f"Database error fetching products: {e}")
+        return jsonify({'error': 'Database error'}), 500
 
 @app.route('/api/products/<string:product_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_product(product_id):
-    is_prod = os.getenv('FLASK_ENV') == 'production' or os.getenv('API_BASE_URL')
-    conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
-            if request.method == 'GET':
-                cursor.execute("SELECT * FROM products WHERE id = %s", (product_id,))
-                product = cursor.fetchone()
-                if product:
-                    product['images'] = process_image_paths(product.get('images'), is_prod)
-                    return jsonify(product)
-                return jsonify({'error': 'Product not found'}), 404
+        product = Product.query.get(product_id)
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
 
-            elif request.method == 'PUT':
-                new_image_paths = []
-                api_base_url = os.getenv('API_BASE_URL', request.host_url).rstrip('/')
-                
-                for i in range(1, 5):
-                    file_key = f'image{i}'
-                    url_key = f'imageUrl{i}'
-                    
-                    if file_key in request.files and request.files[file_key].filename != '':
-                        file = request.files[file_key]
-                        if file and allowed_file(file.filename):
-                            filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
-                            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                            new_image_paths.append(f"/uploads/{filename}")
-                    elif request.form.get(url_key) and request.form.get(url_key).strip():
-                        existing_full_url = request.form.get(url_key)
-                        # Convert absolute URL back to relative path for storage
-                        if existing_full_url.startswith(api_base_url):
-                            relative_path = existing_full_url.replace(api_base_url, '', 1)
-                            new_image_paths.append(relative_path)
-                        else:
-                            new_image_paths.append(existing_full_url)
+        if request.method == 'GET':
+            product_dict = product.to_dict()
+            product_dict['images'] = process_image_paths(product_dict['images'])
+            return jsonify(product_dict)
 
-                sql = """UPDATE products SET name=%s, description=%s, category=%s, price=%s, discount=%s, stock=%s, images=%s, is_featured=%s
-                         WHERE id=%s"""
-                values = (
-                    request.form.get('name'), request.form.get('description'), request.form.get('category'),
-                    request.form.get('price'), request.form.get('discount', 0), request.form.get('stock'), 
-                    json.dumps(new_image_paths),
-                    request.form.get('isFeatured') == 'on', product_id
-                )
-                cursor.execute(sql, values)
-                conn.commit()
-                return jsonify({'message': 'Product updated successfully'}), 200
+        elif request.method == 'PUT':
+            new_image_paths = []
+            api_base_url = os.getenv('API_BASE_URL', request.host_url).rstrip('/')
+            
+            for i in range(1, 5):
+                if f'image{i}' in request.files and request.files[f'image{i}'].filename != '':
+                    file = request.files[f'image{i}']
+                    if file and allowed_file(file.filename):
+                        filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
+                        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                        new_image_paths.append(f"/uploads/{filename}")
+                elif request.form.get(f'imageUrl{i}'):
+                    existing_url = request.form.get(f'imageUrl{i}')
+                    if existing_url.startswith(api_base_url):
+                        new_image_paths.append(existing_url.replace(api_base_url, '', 1))
+                    else:
+                        new_image_paths.append(existing_url)
 
-            elif request.method == 'DELETE':
-                cursor.execute("SELECT images FROM products WHERE id = %s", (product_id,))
-                result = cursor.fetchone()
-                if result and result['images']:
-                    image_paths_str = result.get('images', '[]')
-                    try:
-                        image_paths = json.loads(image_paths_str)
-                        for path in image_paths:
-                            # Only delete files that were uploaded to our server
-                            if path and path.startswith('/uploads/'):
-                                try:
-                                    os.remove(os.path.join(app.config['UPLOAD_FOLDER'], path.split('/')[-1]))
-                                except OSError as e:
-                                    app.logger.error(f"Error deleting file {path}: {e}")
-                    except (json.JSONDecodeError, TypeError):
-                         app.logger.error(f"Could not parse images JSON for product {product_id}")
+            product.name = request.form.get('name', product.name)
+            product.description = request.form.get('description', product.description)
+            product.category = request.form.get('category', product.category)
+            product.price = request.form.get('price', product.price)
+            product.discount = request.form.get('discount', product.discount)
+            product.stock = request.form.get('stock', product.stock)
+            product.images = json.dumps(new_image_paths)
+            product.is_featured = request.form.get('isFeatured') == 'on'
+            
+            db.session.commit()
+            return jsonify({'message': 'Product updated successfully'})
 
-                
-                rows_affected = cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
-                if rows_affected == 0:
-                    return jsonify({'error': 'Product not found'}), 404
-                conn.commit()
-                return jsonify({'message': 'Product deleted'}), 200
-    except Exception as e:
-        app.logger.error(f"Error in handle_product for {product_id}: {e}")
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
+        elif request.method == 'DELETE':
+            db.session.delete(product)
+            db.session.commit()
+            return jsonify({'message': 'Product deleted'})
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        app.logger.error(f"Database error on product {product_id}: {e}")
+        return jsonify({'error': 'Database error'}), 500
 
 @app.route('/api/admins', methods=['GET', 'POST'])
 def handle_admins():
-    conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
-    try:
-        with conn.cursor() as cursor:
-            if request.method == 'POST':
-                data = request.get_json()
-                hashed_password = generate_password_hash(data['password'])
-                sql = "INSERT INTO users (name, email, password_hash, role) VALUES (%s, %s, %s, 'admin')"
-                cursor.execute(sql, (data['name'], data['email'], hashed_password))
-                conn.commit()
-                return jsonify({'name': data['name'], 'email': data['email']}), 201
+    if request.method == 'POST':
+        data = request.get_json()
+        if not data or not data.get('name') or not data.get('email') or not data.get('password'):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        hashed_password = generate_password_hash(data['password'])
+        new_admin = User(name=data['name'], email=data['email'], password_hash=hashed_password, role='admin')
+        
+        try:
+            db.session.add(new_admin)
+            db.session.commit()
+            return jsonify({'name': new_admin.name, 'email': new_admin.email}), 201
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({'error': 'Admin with that email already exists'}), 409
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            app.logger.error(f"Database error creating admin: {e}")
+            return jsonify({'error': 'Database error'}), 500
 
-            query = request.args.get('q')
-            sql = "SELECT id, name, email FROM users WHERE role = 'admin'"
-            params = []
-            if query:
-                sql += " AND (name LIKE %s OR email LIKE %s)"
-                search_term = f"%{query}%"
-                params.extend([search_term, search_term])
+    # GET Admins
+    try:
+        query = request.args.get('q')
+        if query:
+            search_term = f"%{query}%"
+            admins_query = User.query.filter(
+                User.role == 'admin',
+                db.or_(User.name.ilike(search_term), User.email.ilike(search_term))
+            )
+        else:
+            admins_query = User.query.filter_by(role='admin')
             
-            cursor.execute(sql, params)
-            admins = cursor.fetchall()
-            return jsonify(admins)
-    except pymysql.IntegrityError:
-        return jsonify({'error': 'Admin with that email already exists'}), 409
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
+        admins = admins_query.all()
+        return jsonify([{'id': a.id, 'name': a.name, 'email': a.email} for a in admins])
+    except SQLAlchemyError as e:
+        app.logger.error(f"Database error fetching admins: {e}")
+        return jsonify({'error': 'Database error'}), 500
 
 @app.route('/api/admins/<int:admin_id>', methods=['DELETE'])
 def handle_admin(admin_id):
-    conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
-            # Prevent deleting the last admin for safety
-            cursor.execute("SELECT COUNT(*) as admin_count FROM users WHERE role = 'admin'")
-            count = cursor.fetchone()['admin_count']
-            if count <= 1:
-                return jsonify({'error': 'Cannot delete the last administrator'}), 400
+        admin_count = User.query.filter_by(role='admin').count()
+        if admin_count <= 1:
+            return jsonify({'error': 'Cannot delete the last administrator'}), 400
 
-            rows_affected = cursor.execute("DELETE FROM users WHERE id = %s AND role = 'admin'", (admin_id,))
-            if rows_affected == 0:
-                return jsonify({'error': 'Administrator not found'}), 404
-            
-            conn.commit()
-            return jsonify({'message': 'Administrator deleted successfully'}), 200
-    except Exception as e:
-        app.logger.error(f"Error deleting admin: {e}")
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            conn.close()
+        user = User.query.filter_by(id=admin_id, role='admin').first()
+        if not user:
+            return jsonify({'error': 'Administrator not found'}), 404
+        
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'message': 'Administrator deleted successfully'})
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        app.logger.error(f"Database error deleting admin: {e}")
+        return jsonify({'error': 'Database error'}), 500
 
 @app.route('/api/settings', methods=['GET', 'POST'])
 def handle_settings():
-    is_prod = os.getenv('FLASK_ENV') == 'production' or os.getenv('API_BASE_URL')
-    conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
-            if request.method == 'POST':
-                data = request.form.to_dict()
-                
-                if 'mainImageFile' in request.files and request.files['mainImageFile'].filename != '':
-                    file = request.files['mainImageFile']
+        settings = Setting.query.get(1)
+        if request.method == 'POST':
+            if not settings:
+                settings = Setting(id=1)
+                db.session.add(settings)
+            
+            data = request.form
+            
+            # Handle Hero Images
+            hero_images_json = data.get('heroImages', '[]')
+            hero_images_data = json.loads(hero_images_json)
+            
+            processed_hero_images = []
+            for index, slide in enumerate(hero_images_data):
+                file_key = f'heroImageFile_{index}'
+                if file_key in request.files and request.files[file_key].filename != '':
+                    file = request.files[file_key]
                     if file and allowed_file(file.filename):
-                        filename = secure_filename(f"setting_{uuid.uuid4()}_{file.filename}")
+                        filename = secure_filename(f"setting_hero_{uuid.uuid4()}_{file.filename}")
                         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                        data['mainImageUrl'] = f"/uploads/{filename}"
-                
-                sql = """INSERT INTO settings (id, heroHeadline, heroSubheadline, heroButtonText, mainImageUrl, 
-                                            featuredCollectionTitle, featuredCollectionDescription, promoSectionTitle, promoSectionDescription, promoSectionVideoUrl, 
-                                            locationSectionTitle, address, hours, mapEmbedUrl, 
-                                            phone, contactEmail, twitterUrl, instagramUrl, facebookUrl)
-                         VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                         ON DUPLICATE KEY UPDATE
-                         heroHeadline=VALUES(heroHeadline), heroSubheadline=VALUES(heroSubheadline), 
-                         heroButtonText=VALUES(heroButtonText), mainImageUrl=VALUES(mainImageUrl),
-                         featuredCollectionTitle=VALUES(featuredCollectionTitle), featuredCollectionDescription=VALUES(featuredCollectionDescription),
-                         promoSectionTitle=VALUES(promoSectionTitle), promoSectionDescription=VALUES(promoSectionDescription), promoSectionVideoUrl=VALUES(promoSectionVideoUrl),
-                         locationSectionTitle=VALUES(locationSectionTitle),
-                         address=VALUES(address), hours=VALUES(hours), mapEmbedUrl=VALUES(mapEmbedUrl),
-                         phone=VALUES(phone), contactEmail=VALUES(contactEmail), twitterUrl=VALUES(twitterUrl),
-                         instagramUrl=VALUES(instagramUrl), facebookUrl=VALUES(facebookUrl)"""
-                values = (
-                    data.get('heroHeadline'), data.get('heroSubheadline'), data.get('heroButtonText'),
-                    data.get('mainImageUrl'), data.get('featuredCollectionTitle'), data.get('featuredCollectionDescription'),
-                    data.get('promoSectionTitle'), data.get('promoSectionDescription'), data.get('promoSectionVideoUrl'),
-                    data.get('locationSectionTitle'), data.get('address'), data.get('hours'), data.get('mapEmbedUrl'),
-                    data.get('phone'), data.get('contactEmail'), data.get('twitterUrl'),
-                    data.get('instagramUrl'), data.get('facebookUrl')
-                )
-                cursor.execute(sql, values)
-                conn.commit()
+                        slide['imageUrl'] = f"/uploads/{filename}"
+                processed_hero_images.append(slide)
 
-                cursor.execute("SELECT * FROM settings WHERE id = 1")
-                settings = cursor.fetchone()
-                if settings:
-                    if settings.get('mainImageUrl'):
-                         if is_prod:
-                            settings['mainImageUrl'] = make_image_url_absolute(os.getenv('API_BASE_URL'), settings.get('mainImageUrl'))
-                    return jsonify(settings)
-                return jsonify(data), 200
+            settings.heroImages = processed_hero_images
+            settings.featuredCollectionTitle = data.get('featuredCollectionTitle', settings.featuredCollectionTitle)
+            settings.featuredCollectionDescription = data.get('featuredCollectionDescription', settings.featuredCollectionDescription)
+            settings.promoSectionTitle = data.get('promoSectionTitle', settings.promoSectionTitle)
+            settings.promoSectionDescription = data.get('promoSectionDescription', settings.promoSectionDescription)
+            settings.promoSectionVideoUrl = data.get('promoSectionVideoUrl', settings.promoSectionVideoUrl)
+            settings.phone = data.get('phone', settings.phone)
+            settings.contactEmail = data.get('contactEmail', settings.contactEmail)
+            settings.twitterUrl = data.get('twitterUrl', settings.twitterUrl)
+            settings.instagramUrl = data.get('instagramUrl', settings.instagramUrl)
+            settings.facebookUrl = data.get('facebookUrl', settings.facebookUrl)
 
-            cursor.execute("""SELECT heroHeadline, heroSubheadline, heroButtonText, mainImageUrl, 
-                                     featuredCollectionTitle, featuredCollectionDescription, promoSectionTitle, promoSectionDescription, promoSectionVideoUrl,
-                                     locationSectionTitle, address, hours, mapEmbedUrl, 
-                                     phone, contactEmail, twitterUrl, instagramUrl, facebookUrl 
-                              FROM settings WHERE id = 1""")
-            settings = cursor.fetchone()
-            if settings:
-                if settings.get('mainImageUrl'):
-                    if is_prod:
-                        settings['mainImageUrl'] = make_image_url_absolute(os.getenv('API_BASE_URL'), settings['mainImageUrl'])
-                return jsonify(settings)
-            return jsonify({}), 404 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
+            db.session.commit()
+            
+            settings_dict = settings.to_dict()
+            if settings_dict.get('heroImages'):
+                for slide in settings_dict['heroImages']:
+                    if slide.get('imageUrl'):
+                        slide['imageUrl'] = make_image_url_absolute(slide['imageUrl'])
+            return jsonify(settings_dict)
+
+        # GET request
+        if settings:
+            settings_dict = settings.to_dict()
+            if settings_dict.get('heroImages'):
+                 for slide in settings_dict['heroImages']:
+                    if slide.get('imageUrl'):
+                        slide['imageUrl'] = make_image_url_absolute(slide['imageUrl'])
+            return jsonify(settings_dict)
+        return jsonify({}), 404
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        app.logger.error(f"Database error on settings: {e}")
+        return jsonify({'error': 'Database error'}), 500
 
 @app.route('/api/notifications', methods=['POST'])
 def create_notification():
     data = request.get_json()
-    conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
+    if not data or 'message' not in data:
+        return jsonify({'error': 'Message is required'}), 400
+    
+    new_notification = Notification(
+        message=data['message'],
+        imageUrl=data.get('imageUrl'),
+        linkUrl=data.get('linkUrl')
+    )
     try:
-        with conn.cursor() as cursor:
-            sql = "INSERT INTO notifications (message, imageUrl, linkUrl) VALUES (%s, %s, %s)"
-            cursor.execute(sql, (data.get('message'), data.get('imageUrl'), data.get('linkUrl')))
-            conn.commit()
-            return jsonify({'message': 'Notification created'}), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
-
+        db.session.add(new_notification)
+        db.session.commit()
+        return jsonify({'message': 'Notification created'}), 201
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        app.logger.error(f"Database error creating notification: {e}")
+        return jsonify({'error': 'Database error'}), 500
 
 @app.route('/api/notifications/latest', methods=['GET'])
 def get_latest_notification():
-    is_prod = os.getenv('FLASK_ENV') == 'production' or os.getenv('API_BASE_URL')
-    conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 1")
-            notification = cursor.fetchone()
-            if notification:
-                if notification.get('imageUrl') and is_prod:
-                    notification['imageUrl'] = make_image_url_absolute(os.getenv('API_BASE_URL'), notification['imageUrl'])
-                return jsonify(notification)
+        notification = Notification.query.order_by(Notification.created_at.desc()).first()
+        if not notification:
             return jsonify({'error': 'No notifications found'}), 404
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
+            
+        notification_dict = notification.to_dict()
+        if notification_dict.get('imageUrl'):
+            notification_dict['imageUrl'] = make_image_url_absolute(notification_dict['imageUrl'])
+        return jsonify(notification_dict)
+    except SQLAlchemyError as e:
+        app.logger.error(f"Database error fetching latest notification: {e}")
+        return jsonify({'error': 'Database error'}), 500
+
+@app.route('/api/stores', methods=['GET', 'POST'])
+def handle_stores():
+    if request.method == 'POST':
+        try:
+            data = request.form
+            new_store = StoreLocation(
+                name=data.get('name'),
+                address=data.get('address'),
+                city=data.get('city'),
+                phone=data.get('phone'),
+                hours=data.get('hours'),
+                mapEmbedUrl=data.get('mapEmbedUrl')
+            )
+            if 'imageFile' in request.files and request.files['imageFile'].filename != '':
+                file = request.files['imageFile']
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(f"store_{uuid.uuid4()}_{file.filename}")
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    new_store.imageUrl = f"/uploads/{filename}"
+            elif data.get('imageUrl'):
+                new_store.imageUrl = data.get('imageUrl')
+
+            db.session.add(new_store)
+            db.session.commit()
+            return jsonify(new_store.to_dict()), 201
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error creating store: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    # GET all stores
+    stores = StoreLocation.query.all()
+    stores_list = []
+    for s in stores:
+        s_dict = s.to_dict()
+        s_dict['imageUrl'] = make_image_url_absolute(s_dict['imageUrl'])
+        stores_list.append(s_dict)
+    return jsonify(stores_list)
+
+
+@app.route('/api/stores/<int:store_id>', methods=['PUT', 'DELETE'])
+def handle_store(store_id):
+    store = StoreLocation.query.get_or_404(store_id)
+    if request.method == 'PUT':
+        try:
+            data = request.form
+            store.name = data.get('name', store.name)
+            store.address = data.get('address', store.address)
+            store.city = data.get('city', store.city)
+            store.phone = data.get('phone', store.phone)
+            store.hours = data.get('hours', store.hours)
+            store.mapEmbedUrl = data.get('mapEmbedUrl', store.mapEmbedUrl)
+            
+            if 'imageFile' in request.files and request.files['imageFile'].filename != '':
+                file = request.files['imageFile']
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(f"store_{uuid.uuid4()}_{file.filename}")
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    store.imageUrl = f"/uploads/{filename}"
+            elif data.get('imageUrl'):
+                store.imageUrl = data.get('imageUrl')
+
+            db.session.commit()
+            return jsonify(store.to_dict())
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error updating store: {e}")
+            return jsonify({'error': str(e)}), 500
+            
+    elif request.method == 'DELETE':
+        db.session.delete(store)
+        db.session.commit()
+        return jsonify({'message': 'Store deleted successfully'})
+
 
 @app.route('/api/generate-invoice-docx', methods=['POST'])
 def generate_invoice_docx():
     data = request.get_json()
-    customer_name = data.get('customerName')
-    items = data.get('items') # Expects a list of {productId, quantity}
-
-    if not all([customer_name, items]):
+    if not data or not data.get('customerName') or not data.get('items'):
         return jsonify({'error': 'Missing required fields'}), 400
-
-    conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
+    
+    customer_name = data['customerName']
+    items = data['items']
+    grand_total = 0
+    invoice_items = []
     
     try:
-        grand_total = 0
-        invoice_items = []
+        with db.session.begin_nested():
+            for item_data in items:
+                product_id = item_data.get('productId')
+                quantity = int(item_data.get('quantity', 1))
 
-        with conn.cursor() as cursor:
-            conn.begin()
-
-            for item in items:
-                product_id = item.get('productId')
-                quantity = int(item.get('quantity', 1))
-
-                cursor.execute("SELECT * FROM products WHERE id = %s FOR UPDATE", (product_id,))
-                product = cursor.fetchone()
+                product = Product.query.with_for_update().get(product_id)
 
                 if not product:
-                    raise Exception(f"Producto con ID {product_id} no encontrado.")
+                    raise ValueError(f"Producto con ID {product_id} no encontrado.")
+                if product.stock < quantity:
+                    raise ValueError(f"Stock insuficiente para '{product.name}'. Disponible: {product.stock}, Solicitado: {quantity}.")
 
-                if product['stock'] < quantity:
-                    raise Exception(f"Stock insuficiente para '{product['name']}'. Disponible: {product['stock']}, Solicitado: {quantity}.")
-
-                new_stock = product['stock'] - quantity
-                cursor.execute("UPDATE products SET stock = %s WHERE id = %s", (new_stock, product_id))
-
-                price = float(product['price'])
-                discount_percent = int(product['discount'])
-                discount_amount = (price * discount_percent) / 100
-                discounted_price = price - discount_amount
+                product.stock -= quantity
+                
+                price = float(product.price)
+                discount_percent = int(product.discount or 0)
+                discounted_price = price - (price * discount_percent / 100)
                 subtotal = discounted_price * quantity
                 grand_total += subtotal
                 
                 invoice_items.append({
-                    "name": product['name'],
+                    "name": product.name,
                     "quantity": quantity,
                     "unit_price": discounted_price,
                     "subtotal": subtotal
                 })
-        
-            conn.commit()
+        db.session.commit()
 
+    except (ValueError, SQLAlchemyError) as e:
+        db.session.rollback()
+        app.logger.error(f"Error processing invoice transaction: {e}")
+        return jsonify({'error': str(e)}), 500
+    
+    # --- Generate DOCX ---
+    try:
         invoice_number = f"INV-{int(datetime.now().timestamp())}"
         
         qr_url = "https://royal-fernet.vercel.app"
@@ -550,7 +520,6 @@ def generate_invoice_docx():
 
         document = Document()
         document.add_heading('Factura - Royal-Fernet', 0)
-
         p = document.add_paragraph()
         p.add_run('Vendedor: ').bold = True
         p.add_run('Royal-Fernet\n')
@@ -598,17 +567,11 @@ def generate_invoice_docx():
             as_attachment=True,
             download_name=f'factura_{customer_name.replace(" ", "_")}.docx'
         )
-
     except Exception as e:
-        if conn:
-            conn.rollback() 
-        app.logger.error(f"Error in generate_invoice_docx: {e}")
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            conn.close()
+        app.logger.error(f"Error generating DOCX: {e}")
+        return jsonify({'error': 'Failed to generate invoice document'}), 500
 
-    
-
-    
-    
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, port=5000)

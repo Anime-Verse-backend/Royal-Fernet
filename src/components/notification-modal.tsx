@@ -18,18 +18,26 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { getSafeImageUrl } from '@/lib/utils';
+import { PartyPopper } from 'lucide-react';
+
 
 export function NotificationModal() {
   const [notification, setNotification] = useState<Notification | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    fetchLatestNotification().then(data => {
-      if (data) {
-        setNotification(data);
-        setIsOpen(true);
-      }
-    });
+    // Solo mostramos la notificación una vez por sesión del navegador
+    const hasSeenNotification = sessionStorage.getItem('notification_seen');
+    if (!hasSeenNotification) {
+      fetchLatestNotification().then(data => {
+        if (data) {
+          setNotification(data);
+          setIsOpen(true);
+          sessionStorage.setItem('notification_seen', 'true');
+        }
+      });
+    }
   }, []);
 
   const handleDismiss = () => {
@@ -39,6 +47,8 @@ export function NotificationModal() {
   if (!isOpen || !notification) {
     return null;
   }
+  
+  const safeImageUrl = getSafeImageUrl(notification.imageUrl, '512x288');
 
   return (
     <Dialog open={isOpen} onOpenChange={handleDismiss}>
@@ -46,7 +56,7 @@ export function NotificationModal() {
         {notification.imageUrl && (
           <div className="relative aspect-video w-full">
             <Image
-              src={notification.imageUrl}
+              src={safeImageUrl}
               alt="Notification image"
               data-ai-hint="announcement promotion"
               fill
@@ -54,19 +64,20 @@ export function NotificationModal() {
             />
           </div>
         )}
-        <DialogHeader className="p-6 text-center items-center">
-          <DialogTitle className="text-2xl font-headline">A Special Announcement</DialogTitle>
+        <DialogHeader className="p-6 pb-2 text-center items-center space-y-4">
+          <PartyPopper className="h-10 w-10 text-primary" />
+          <DialogTitle className="text-2xl font-headline">¡Un Anuncio Especial!</DialogTitle>
           <DialogDescription className="text-base text-muted-foreground pt-2">
             {notification.message}
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="px-6 pb-6 pt-0 sm:justify-center gap-2 w-full flex-col-reverse sm:flex-row">
+        <DialogFooter className="p-6 pt-4 sm:justify-center gap-2 w-full flex-col-reverse sm:flex-row">
             <Button type="button" variant="secondary" onClick={handleDismiss} className="w-full sm:w-auto">
-                Dismiss
+                Cerrar
             </Button>
             {notification.linkUrl && (
                 <Button asChild className="w-full sm:w-auto">
-                  <a href={notification.linkUrl}>Check it out</a>
+                  <a href={notification.linkUrl} target="_blank" rel="noopener noreferrer">Ver más</a>
                 </Button>
             )}
         </DialogFooter>
