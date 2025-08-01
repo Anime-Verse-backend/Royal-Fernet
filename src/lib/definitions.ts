@@ -11,7 +11,7 @@ export type Product = {
   images: string[];
   discount?: number;
   category: string;
-  is_featured: boolean; // Corregido de isFeatured
+  is_featured: boolean; // Snake case to match the database response
   stock: number;
 };
 
