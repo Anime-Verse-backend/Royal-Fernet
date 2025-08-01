@@ -27,19 +27,16 @@ CORS(app, resources={r"/*": {"origins": [FRONTEND_URL, "http://localhost:9002"],
 
 # --- Database Connection Helper ---
 def get_db_connection():
-    ssl_args = {'ssl_verify_cert': True}
-    render_ca_path = '/etc/secrets/ca.pem'
-    local_ca_path = os.path.join(os.path.dirname(__file__), 'ca.pem')
-
+    ssl_args = {}
+    # Render's path for secret files
+    render_ca_path = '/etc/secrets/ca.pem' 
+    
     if os.path.exists(render_ca_path):
-        app.logger.info("Found Render SSL certificate.")
+        app.logger.info("Found Render SSL certificate, using it for connection.")
         ssl_args['ssl_ca'] = render_ca_path
-    elif os.path.exists(local_ca_path):
-        app.logger.info("Found local SSL certificate.")
-        ssl_args['ssl_ca'] = local_ca_path
+        ssl_args['ssl_verify_cert'] = True
     else:
-        app.logger.warning("No SSL certificate found. Connection will likely fail to Aiven.")
-        # No establecemos ssl_ca si no se encuentra, pero mantenemos la verificación.
+        app.logger.warning("No SSL certificate found at /etc/secrets/ca.pem. Connection may fail if SSL is required.")
     
     try:
         connection = pymysql.connect(
@@ -50,7 +47,7 @@ def get_db_connection():
             port=int(os.getenv('DB_PORT', 3306)),
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=20, # Aumentar el tiempo de espera
+            connect_timeout=20,
             **ssl_args
         )
         app.logger.info("Successfully connected to the database.")
@@ -571,5 +568,3 @@ def generate_invoice_docx():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
-
-    

@@ -12,18 +12,16 @@ logging.basicConfig(level=logging.INFO)
 
 # --- Database Connection ---
 def get_db_connection():
-    ssl_args = {'ssl_verify_cert': True}
+    ssl_args = {}
+    # Render's path for secret files
     render_ca_path = '/etc/secrets/ca.pem'
-    local_ca_path = os.path.join(os.path.dirname(__file__), 'ca.pem')
 
     if os.path.exists(render_ca_path):
-        logging.info("Found Render SSL certificate for init_db.")
+        logging.info("Found Render SSL certificate for init_db, using it for connection.")
         ssl_args['ssl_ca'] = render_ca_path
-    elif os.path.exists(local_ca_path):
-        logging.info("Found local SSL certificate for init_db.")
-        ssl_args['ssl_ca'] = local_ca_path
+        ssl_args['ssl_verify_cert'] = True
     else:
-        logging.warning("No SSL certificate found for init_db. Connection will likely fail to Aiven.")
+        logging.warning("No SSL certificate found at /etc/secrets/ca.pem for init_db. Connection may fail if SSL is required.")
 
     try:
         connection = pymysql.connect(
@@ -189,5 +187,3 @@ def seed_data():
 if __name__ == '__main__':
     initialize_database()
     seed_data()
-
-    
