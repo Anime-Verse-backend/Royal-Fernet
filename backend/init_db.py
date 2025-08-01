@@ -189,3 +189,5 @@ def seed_data():
 if __name__ == '__main__':
     initialize_database()
     seed_data()
+
+    
