@@ -3,30 +3,28 @@ import os
 import pymysql
 import json
 import uuid
+import logging
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
 
 # --- Database Connection ---
 def get_db_connection():
-    # Aiven requires SSL, so we need to specify the CA certificate
-    ssl_args = {}
-    # Render's Secret Files are mounted at /etc/secrets
+    ssl_args = {'ssl_verify_cert': True}
     render_ca_path = '/etc/secrets/ca.pem'
     local_ca_path = os.path.join(os.path.dirname(__file__), 'ca.pem')
 
     if os.path.exists(render_ca_path):
-        ca_path = render_ca_path
+        logging.info("Found Render SSL certificate for init_db.")
+        ssl_args['ssl_ca'] = render_ca_path
     elif os.path.exists(local_ca_path):
-        ca_path = local_ca_path
+        logging.info("Found local SSL certificate for init_db.")
+        ssl_args['ssl_ca'] = local_ca_path
     else:
-        ca_path = None
-    
-    if ca_path:
-        ssl_args['ssl_ca'] = ca_path
-        ssl_args['ssl_verify_cert'] = True
-        
+        logging.warning("No SSL certificate found for init_db. Connection will likely fail to Aiven.")
+
     try:
         connection = pymysql.connect(
             host=os.getenv('DB_HOST'),
@@ -34,11 +32,12 @@ def get_db_connection():
             password=os.getenv('DB_PASSWORD'),
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=20,
             **ssl_args
         )
         return connection
     except pymysql.MySQLError as e:
-        print(f"❌ Error connecting to MySQL server: {e}")
+        logging.error(f"Error connecting to MySQL server in init_db: {e}")
         exit(1)
 
 def initialize_database():

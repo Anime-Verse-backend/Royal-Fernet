@@ -5,6 +5,7 @@ import json
 import pymysql
 import io
 import qrcode
+import logging
 from docx import Document
 from docx.shared import Inches
 from flask import send_file, send_from_directory, request, jsonify
@@ -18,31 +19,28 @@ from datetime import datetime
 # --- App Initialization ---
 load_dotenv()
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
 # --- CORS Configuration ---
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:9002')
-CORS(app, resources={r"/*": {"origins": FRONTEND_URL, "supports_credentials": True}})
+CORS(app, resources={r"/*": {"origins": [FRONTEND_URL, "http://localhost:9002"], "supports_credentials": True}})
 
 # --- Database Connection Helper ---
 def get_db_connection():
-    # Aiven requires SSL, so we need to specify the CA certificate
-    ssl_args = {}
-    # Render's Secret Files are mounted at /etc/secrets
+    ssl_args = {'ssl_verify_cert': True}
     render_ca_path = '/etc/secrets/ca.pem'
     local_ca_path = os.path.join(os.path.dirname(__file__), 'ca.pem')
 
     if os.path.exists(render_ca_path):
-        ca_path = render_ca_path
+        app.logger.info("Found Render SSL certificate.")
+        ssl_args['ssl_ca'] = render_ca_path
     elif os.path.exists(local_ca_path):
-        ca_path = local_ca_path
+        app.logger.info("Found local SSL certificate.")
+        ssl_args['ssl_ca'] = local_ca_path
     else:
-        ca_path = None
+        app.logger.warning("No SSL certificate found. Connection will likely fail to Aiven.")
+        # No establecemos ssl_ca si no se encuentra, pero mantenemos la verificación.
     
-    if ca_path:
-        ssl_args['ssl_ca'] = ca_path
-        ssl_args['ssl_verify_cert'] = True
-
-
     try:
         connection = pymysql.connect(
             host=os.getenv('DB_HOST'),
@@ -52,11 +50,13 @@ def get_db_connection():
             port=int(os.getenv('DB_PORT', 3306)),
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=20, # Aumentar el tiempo de espera
             **ssl_args
         )
+        app.logger.info("Successfully connected to the database.")
         return connection
     except pymysql.MySQLError as e:
-        app.logger.error(f"Error connecting to MySQL: {e}")
+        app.logger.error(f"Error connecting to MySQL database: {e}")
         return None
 
 # --- File Upload Configuration ---
@@ -571,5 +571,3 @@ def generate_invoice_docx():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
-
-
