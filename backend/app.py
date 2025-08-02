@@ -559,6 +559,67 @@ def generate_invoice_docx():
         app.logger.error(f"Error generating DOCX: {e}")
         return jsonify({'error': 'Failed to generate invoice document'}), 500
 
+# --- Database Viewer Endpoints ---
+
+@app.route('/api/db/tables', methods=['GET'])
+def get_db_tables():
+    conn = get_db_connection()
+    if not conn: return jsonify({'error': 'Database connection failed'}), 500
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+            """)
+            tables = [row[0] for row in cursor.fetchall()]
+            return jsonify(tables)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/db/tables/<string:table_name>', methods=['GET'])
+def get_table_content(table_name):
+    # Basic sanitation to prevent obvious SQL injection.
+    # In a real-world app, use a more robust validation method.
+    if not table_name.isalnum() and '_' not in table_name:
+        return jsonify({'error': 'Invalid table name'}), 400
+
+    conn = get_db_connection()
+    if not conn: return jsonify({'error': 'Database connection failed'}), 500
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            # The table name is sanitized, but it's generally safer to use psycopg2's sql module for identifiers
+            from psycopg2 import sql
+            query = sql.SQL("SELECT * FROM {}").format(sql.Identifier(table_name))
+            cursor.execute(query)
+            
+            # Fetch all rows and convert them to a list of dicts
+            rows = [dict(row) for row in cursor.fetchall()]
+            
+            # Convert non-serializable types like datetime or decimal
+            def json_converter(o):
+                if isinstance(o, datetime):
+                    return o.isoformat()
+                if isinstance(o, (float, int)):
+                     return o
+                return str(o)
+            
+            # Apply converter to each value in each row
+            for row in rows:
+                for key, value in row.items():
+                    row[key] = json_converter(value)
+                    
+            return jsonify(rows)
+            
+    except Exception as e:
+        return jsonify({'error': f"Could not fetch table '{table_name}': {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
 

@@ -64,10 +64,6 @@ export default async function Home() {
       {storeInfo.promoSectionVideoUrl && (
         <section className="bg-secondary py-16 md:py-24">
             <div className="container mx-auto px-4 grid md:grid-cols-2 gap-12 items-center">
-                <div className="text-center md:text-left">
-                    <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">{storeInfo.promoSectionTitle}</h2>
-                    <p className="text-lg text-muted-foreground">{storeInfo.promoSectionDescription}</p>
-                </div>
                 <div className="aspect-video w-full rounded-lg overflow-hidden shadow-xl">
                     <iframe 
                         src={storeInfo.promoSectionVideoUrl}
@@ -77,6 +73,10 @@ export default async function Home() {
                         allowFullScreen
                         className="w-full h-full"
                     ></iframe>
+                </div>
+                <div className="text-center md:text-left">
+                    <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">{storeInfo.promoSectionTitle}</h2>
+                    <p className="text-lg text-muted-foreground">{storeInfo.promoSectionDescription}</p>
                 </div>
             </div>
         </section>

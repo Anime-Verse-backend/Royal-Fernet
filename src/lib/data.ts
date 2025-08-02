@@ -125,3 +125,34 @@ export async function fetchLatestNotification(): Promise<Notification | null> {
         return null;
     }
 }
+
+// Database Viewer Functions
+export async function fetchDbTables(): Promise<string[]> {
+  const baseUrl = getBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/api/db/tables`, { cache: 'no-store' });
+    if (!res.ok) {
+      console.error(`Error fetching DB tables: ${res.status} ${res.statusText}`);
+      return [];
+    }
+    return res.json();
+  } catch (error) {
+    console.error('Network error while fetching DB tables:', error);
+    return [];
+  }
+}
+
+export async function fetchTableContent(tableName: string): Promise<any[]> {
+  const baseUrl = getBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/api/db/tables/${tableName}`, { cache: 'no-store' });
+    if (!res.ok) {
+      console.error(`Error fetching content for table ${tableName}: ${res.status} ${res.statusText}`);
+      return [];
+    }
+    return res.json();
+  } catch (error) {
+    console.error(`Network error while fetching content for table ${tableName}:`, error);
+    return [];
+  }
+}

@@ -1,3 +1,4 @@
+
 'use client';
 /**
  * @fileoverview Página del panel de control de administración.
@@ -9,7 +10,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { fetchProducts, fetchAdmins, fetchStoreSettings } from "@/lib/data";
+import { fetchProducts, fetchAdmins, fetchStoreSettings, fetchDbTables, fetchTableContent } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -47,10 +48,10 @@ import {
     TabsTrigger,
 } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PlusCircle, Edit, Trash2, Search, FileText, BellRing, Settings, XCircle, Github, Instagram, Facebook } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, FileText, BellRing, Settings, XCircle, Github, Instagram, Facebook, Database } from "lucide-react";
 import Image from "next/image";
 import Link from 'next/link';
-import { Product, Admin, StoreSettings } from "@/lib/definitions";
+import { Product, Admin, StoreSettings, HeroSlide } from "@/lib/definitions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -70,25 +71,8 @@ import {
     AvatarFallback,
     AvatarImage,
 } from "@/components/ui/avatar";
-import { formatCurrency } from '@/lib/utils';
-
-const getSafeImageUrl = (urlInput: unknown): string => {
-    const placeholder = 'https://placehold.co/64x64.png';
-    if (typeof urlInput !== 'string' || !urlInput.trim()) {
-        return placeholder;
-    }
-
-    if (urlInput.startsWith('/') || urlInput.startsWith('data:')) {
-        return urlInput;
-    }
-
-    try {
-        new URL(urlInput);
-        return urlInput;
-    } catch (e) {
-        return placeholder;
-    }
-};
+import { formatCurrency, getSafeImageUrl } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
 
 const WhatsappIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg viewBox="0 0 32 32" fill="currentColor" {...props}>
@@ -153,7 +137,7 @@ function ProductForm({ product, onFormSubmit }: { product?: Product, onFormSubmi
 
             <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="isFeatured" className="text-right">Destacado</Label>
-                <Checkbox id="isFeatured" name="isFeatured" defaultChecked={product?.isFeatured} className="col-span-3 justify-self-start" />
+                <Checkbox id="isFeatured" name="isFeatured" defaultChecked={product?.is_featured} className="col-span-3 justify-self-start" />
             </div>
             <DialogFooter>
                 <DialogClose asChild>
@@ -191,17 +175,41 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
     );
 }
 
-// Form component for store settings
 function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
+    const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>(settings?.heroImages || []);
+
+    const handleAddSlide = () => {
+        setHeroSlides([...heroSlides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
+    };
+
+    const handleRemoveSlide = (index: number) => {
+        setHeroSlides(heroSlides.filter((_, i) => i !== index));
+    };
+
+    const handleSlideChange = (index: number, field: keyof HeroSlide, value: string) => {
+        const newSlides = [...heroSlides];
+        newSlides[index] = { ...newSlides[index], [field]: value };
+        setHeroSlides(newSlides);
+    };
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setIsSubmitting(true);
         
         const formData = new FormData(event.currentTarget);
+        const finalSlides = heroSlides.map((slide, index) => ({
+            id: slide.id?.startsWith('new_') ? `slide_${Date.now()}_${index}` : slide.id,
+            headline: formData.get(`heroHeadline_${index}`) as string,
+            subheadline: formData.get(`heroSubheadline_${index}`) as string,
+            buttonText: formData.get(`heroButtonText_${index}`) as string,
+            imageUrl: formData.get(`heroImageUrl_${index}`) as string,
+        }));
+
+        formData.set('heroImages', JSON.stringify(finalSlides));
+
         const result = await updateStoreSettings(formData);
 
         if (result.success) {
@@ -225,41 +233,55 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
         <form onSubmit={handleSubmit} className="space-y-6" encType="multipart/form-data">
             <Card>
                 <CardHeader>
-                    <CardTitle>Sección de Bienvenida (Héroe)</CardTitle>
-                    <CardDescription>Personaliza la sección principal de tu página de inicio.</CardDescription>
+                    <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
+                    <CardDescription>Personaliza las diapositivas del carrusel principal.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="heroHeadline">Título Principal</Label>
-                        <Input id="heroHeadline" name="heroHeadline" defaultValue={settings?.heroHeadline} placeholder="Elegancia Atemporal, Redefinida." required />
-                        <p className="text-sm text-muted-foreground">El encabezado grande y llamativo.</p>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="heroSubheadline">Subtítulo</Label>
-                        <Textarea id="heroSubheadline" name="heroSubheadline" defaultValue={settings?.heroSubheadline} placeholder="Descubre nuestra colección exclusiva..." required />
-                        <p className="text-sm text-muted-foreground">El texto que acompaña al título principal.</p>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="heroButtonText">Texto del Botón</Label>
-                        <Input id="heroButtonText" name="heroButtonText" defaultValue={settings?.heroButtonText} placeholder="Explorar Colección" required />
-                        <p className="text-sm text-muted-foreground">El texto dentro del botón de llamada a la acción.</p>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="mainImageUrl">Imagen de Fondo del Héroe</Label>
-                        <Tabs defaultValue={settings?.mainImageUrl ? 'url' : 'upload'} className="w-full">
-                            <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="url">URL</TabsTrigger>
-                                <TabsTrigger value="upload">Subir Archivo</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="url">
-                                <Input name="mainImageUrl" placeholder="URL de la imagen" defaultValue={settings?.mainImageUrl} />
-                            </TabsContent>
-                            <TabsContent value="upload">
-                                <Input name="mainImageFile" type="file" accept="image/*" />
-                            </TabsContent>
-                        </Tabs>
-                        <p className="text-sm text-muted-foreground">La imagen de fondo para la sección de bienvenida.</p>
-                    </div>
+                <CardContent className="space-y-6">
+                    {heroSlides.map((slide, index) => (
+                        <div key={slide.id || index} className="space-y-4 p-4 border rounded-lg relative">
+                             <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute top-2 right-2 text-destructive"
+                                onClick={() => handleRemoveSlide(index)}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <h4 className="font-semibold">Diapositiva {index + 1}</h4>
+                            <div className="grid gap-2">
+                                <Label htmlFor={`heroHeadline_${index}`}>Título</Label>
+                                <Input id={`heroHeadline_${index}`} name={`heroHeadline_${index}`} defaultValue={slide.headline} required />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor={`heroSubheadline_${index}`}>Subtítulo</Label>
+                                <Textarea id={`heroSubheadline_${index}`} name={`heroSubheadline_${index}`} defaultValue={slide.subheadline} required />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor={`heroButtonText_${index}`}>Texto del Botón</Label>
+                                <Input id={`heroButtonText_${index}`} name={`heroButtonText_${index}`} defaultValue={slide.buttonText} required />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor={`heroImage_${index}`}>Imagen de Fondo</Label>
+                                <Tabs defaultValue={slide.imageUrl ? 'url' : 'upload'} className="w-full">
+                                     <TabsList className="grid w-full grid-cols-2">
+                                        <TabsTrigger value="url">URL</TabsTrigger>
+                                        <TabsTrigger value="upload">Subir Archivo</TabsTrigger>
+                                    </TabsList>
+                                     <TabsContent value="url">
+                                        <Input name={`heroImageUrl_${index}`} placeholder="URL de la imagen" defaultValue={slide.imageUrl} />
+                                    </TabsContent>
+                                    <TabsContent value="upload">
+                                        <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
+                                    </TabsContent>
+                                </Tabs>
+                            </div>
+                        </div>
+                    ))}
+                    <Button type="button" variant="outline" onClick={handleAddSlide}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Añadir Slide
+                    </Button>
                 </CardContent>
             </Card>
 
@@ -287,7 +309,7 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                     <CardDescription>Configura la sección con un video de YouTube y texto descriptivo.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="grid gap-2">
+                     <div className="grid gap-2">
                         <Label htmlFor="promoSectionTitle">Título de la Sección Promo</Label>
                         <Input id="promoSectionTitle" name="promoSectionTitle" defaultValue={settings?.promoSectionTitle} placeholder="ROYAL DELUXE" />
                     </div>
@@ -303,40 +325,6 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                 </CardContent>
             </Card>
             
-            <Card>
-                 <CardHeader>
-                    <CardTitle>Sección de Ubicación</CardTitle>
-                    <CardDescription>Actualiza los detalles de tu tienda física que se muestran en la página de inicio.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="locationSectionTitle">Título de la Sección</Label>
-                        <Input id="locationSectionTitle" name="locationSectionTitle" defaultValue={settings?.locationSectionTitle} placeholder="Visita Nuestra Tienda Insignia" required />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="address">Dirección</Label>
-                        <Input id="address" name="address" defaultValue={settings?.address} required />
-                    </div>
-                     <div className="grid gap-2">
-                        <Label htmlFor="hours">Horario de Apertura</Label>
-                        <Input id="hours" name="hours" defaultValue={settings?.hours} required />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="mapEmbedUrl">URL de Google Maps (Embed)</Label>
-                        <Textarea 
-                            id="mapEmbedUrl" 
-                            name="mapEmbedUrl" 
-                            defaultValue={settings?.mapEmbedUrl} 
-                            placeholder="Pega aquí la URL 'src' del iframe de Google Maps" 
-                            rows={3}
-                        />
-                        <p className="text-sm text-muted-foreground">
-                            Ve a Google Maps, busca un lugar, haz clic en "Compartir", luego en "Insertar un mapa" y copia solo la URL que está dentro del atributo <strong>src="..."</strong>.
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
-
             <Card>
                 <CardHeader>
                     <CardTitle>Información de Contacto y Redes Sociales</CardTitle>
@@ -371,6 +359,94 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
             </div>
         </form>
     );
+}
+
+function DatabaseViewer() {
+    const [tables, setTables] = useState<string[]>([]);
+    const [selectedTable, setSelectedTable] = useState<string>('');
+    const [tableContent, setTableContent] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const { toast } = useToast();
+
+    useEffect(() => {
+        fetchDbTables().then(setTables);
+    }, []);
+
+    const handleTableSelect = async (tableName: string) => {
+        if (!tableName) {
+            setSelectedTable('');
+            setTableContent([]);
+            return;
+        }
+        setLoading(true);
+        setSelectedTable(tableName);
+        try {
+            const content = await fetchTableContent(tableName);
+            setTableContent(content);
+        } catch (error) {
+            toast({ title: "Error", description: "Could not load table content.", variant: "destructive" });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const headers = tableContent.length > 0 ? Object.keys(tableContent[0]) : [];
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Visor de Base de Datos</CardTitle>
+                <CardDescription>
+                    Selecciona una tabla para ver su contenido. Esto es de solo lectura.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="max-w-xs">
+                     <Select onValueChange={handleTableSelect} value={selectedTable}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Selecciona una tabla..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {tables.map(table => (
+                                <SelectItem key={table} value={table}>{table}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+               
+                {loading ? (
+                    <div className="space-y-2">
+                        <Skeleton className="h-8 w-full" />
+                        <Skeleton className="h-8 w-full" />
+                        <Skeleton className="h-8 w-full" />
+                    </div>
+                ) : (
+                    tableContent.length > 0 && (
+                        <div className="rounded-lg border overflow-auto max-h-[600px]">
+                            <Table>
+                                <TableHeader className="sticky top-0 bg-secondary">
+                                    <TableRow>
+                                        {headers.map(header => <TableHead key={header}>{header}</TableHead>)}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {tableContent.map((row, rowIndex) => (
+                                        <TableRow key={rowIndex}>
+                                            {headers.map(header => (
+                                                <TableCell key={`${rowIndex}-${header}`} className="max-w-xs truncate">
+                                                    {String(row[header])}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )
+                )}
+            </CardContent>
+        </Card>
+    )
 }
 
 // Main page component
@@ -549,11 +625,12 @@ export default function AdminDashboardPage() {
             <h1 className="text-3xl font-bold font-headline mb-8">Panel de Administración</h1>
 
             <Tabs defaultValue="products" className="w-full">
-                <TabsList className="grid w-full grid-cols-1 h-auto md:h-10 md:grid-cols-5 mb-6">
+                <TabsList className="grid w-full grid-cols-1 h-auto md:h-10 md:grid-cols-6 mb-6">
                     <TabsTrigger value="overview">Resumen</TabsTrigger>
                     <TabsTrigger value="products">Productos</TabsTrigger>
                     <TabsTrigger value="admins">Administradores</TabsTrigger>
                     <TabsTrigger value="settings">Configuración</TabsTrigger>
+                    <TabsTrigger value="database">Base de Datos</TabsTrigger>
                     <TabsTrigger value="developers">Desarrolladores</TabsTrigger>
                 </TabsList>
 
@@ -725,7 +802,7 @@ export default function AdminDashboardPage() {
                                                     <TableCell>{product.category}</TableCell>
                                                     <TableCell>{formatCurrency(product.price)}</TableCell>
                                                     <TableCell>{product.stock}</TableCell>
-                                                    <TableCell>{product.isFeatured ? 'Sí' : 'No'}</TableCell>
+                                                    <TableCell>{product.is_featured ? 'Sí' : 'No'}</TableCell>
                                                     <TableCell className="text-right">
                                                         <Dialog>
                                                             <DialogTrigger asChild>
@@ -897,6 +974,10 @@ export default function AdminDashboardPage() {
                     </Card>
                 </TabsContent>
 
+                <TabsContent value="database">
+                    <DatabaseViewer />
+                </TabsContent>
+
                 <TabsContent value="developers">
                     <div className="grid gap-6">
                         <Card>
@@ -947,8 +1028,8 @@ export default function AdminDashboardPage() {
                                     <li><span className="font-semibold">Framework:</span> Next.js (React)</li>
                                     <li><span className="font-semibold">Estilos:</span> Tailwind CSS</li>
                                     <li><span className="font-semibold">Componentes UI:</span> ShadCN/UI</li>
-                                    <li><span className="font-semibold">Inteligencia Artificial:</span> Google Genkit</li>
-                                    <li><span className="font-semibold">Backend:</span> Python (Flask)</li>
+                                    <li><span className="font-semibold">Backend:</span> Python (Flask) con PostgreSQL</li>
+                                    <li><span className="font-semibold">Hosting:</span> Render & Vercel</li>
                                 </ul>
                             </CardContent>
                         </Card>
