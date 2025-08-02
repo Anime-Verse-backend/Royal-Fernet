@@ -28,7 +28,6 @@ export function NotificationModal() {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    // Solo mostramos la notificación una vez por sesión del navegador
     const hasSeenNotification = sessionStorage.getItem('notification_seen');
     if (!hasSeenNotification) {
       fetchLatestNotification().then(data => {
@@ -67,7 +66,7 @@ export function NotificationModal() {
         )}
         <DialogHeader className="p-6 pb-2 text-center items-center space-y-4">
           <PartyPopper className="h-10 w-10 text-primary" />
-          <DialogTitle className="text-2xl font-headline">¡Un Anuncio Especial!</DialogTitle>
+          <DialogTitle className="text-2xl font-headline">{notification.title || '¡Un Anuncio Especial!'}</DialogTitle>
           <DialogDescription className="text-base text-muted-foreground pt-2">
             {notification.message}
           </DialogDescription>

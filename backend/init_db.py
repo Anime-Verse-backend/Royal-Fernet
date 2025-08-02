@@ -75,6 +75,7 @@ def initialize_database():
                 "notifications": """
                     CREATE TABLE IF NOT EXISTS notifications (
                         id SERIAL PRIMARY KEY,
+                        title TEXT,
                         message TEXT NOT NULL,
                         image_url VARCHAR(2048),
                         link_url VARCHAR(2048),

@@ -69,7 +69,9 @@ def process_image_paths_for_response(image_data_json):
         processed_data = []
         for item in image_data:
             if isinstance(item, dict) and 'imageUrl' in item:
-                item['imageUrl'] = make_image_url_absolute(item['imageUrl'])
+                # Ensure imageUrl is treated as a string before operating on it
+                if 'imageUrl' in item and isinstance(item['imageUrl'], str):
+                    item['imageUrl'] = make_image_url_absolute(item['imageUrl'])
             processed_data.append(item)
         return processed_data
     except (json.JSONDecodeError, TypeError):
@@ -310,7 +312,8 @@ def handle_settings():
 
                 for index, slide in enumerate(hero_images_data):
                     file_key = f'heroImageFile_{index}'
-                    url_key = f'heroImageUrl_{index}'
+                    
+                    if not isinstance(slide, dict): continue
 
                     # 1. Check for a newly uploaded file
                     if file_key in request.files and request.files[file_key].filename != '':
@@ -321,13 +324,11 @@ def handle_settings():
                             slide['imageUrl'] = f"/uploads/{filename}"
                     
                     # 2. Check for an existing URL from hidden inputs or the original JSON
-                    elif data.get(url_key):
-                        existing_url = data.get(url_key)
+                    elif 'imageUrl' in slide:
+                        existing_url = slide.get('imageUrl')
                         # Strip the base URL to store a relative path, but only if it's there
                         if existing_url and isinstance(existing_url, str) and existing_url.startswith(api_base_url):
                              slide['imageUrl'] = existing_url.replace(api_base_url, '', 1)
-                        else:
-                             slide['imageUrl'] = existing_url
 
                     processed_hero_images.append(slide)
 
@@ -384,8 +385,8 @@ def create_notification():
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
         with conn.cursor() as cursor:
-            sql = "INSERT INTO notifications (message, image_url, link_url) VALUES (%s, %s, %s)"
-            cursor.execute(sql, (data['message'], data.get('imageUrl'), data.get('linkUrl')))
+            sql = "INSERT INTO notifications (title, message, image_url, link_url) VALUES (%s, %s, %s, %s)"
+            cursor.execute(sql, (data.get('title'), data['message'], data.get('image_url'), data.get('link_url')))
         conn.commit()
         return jsonify({'message': 'Notification created'}), 201
     finally:

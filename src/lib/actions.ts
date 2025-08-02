@@ -138,7 +138,6 @@ export async function deleteAdmin(id: number) {
     if (!res.ok) { 
         const errorData = await res.json();
         console.error("Falló al eliminar el administrador:", errorData.error);
-        // Aquí podrías redirigir con un parámetro de error si lo deseas, o simplemente loguear el error.
         return { error: errorData.error || 'Falló al eliminar el administrador' }; 
     }
     
@@ -168,18 +167,20 @@ export async function updateStoreSettings(formData: FormData): Promise<{success:
 }
 
 export async function sendNotificationAction(formData: FormData): Promise<{success: boolean, error?: string}> {
+  const title = formData.get('title') as string;
   const message = formData.get('message') as string;
-  const imageUrl = formData.get('imageUrl') as string;
-  const linkUrl = formData.get('linkUrl') as string;
+  const imageUrl = formData.get('image_url') as string;
+  const linkUrl = formData.get('link_url') as string;
 
-  if (!message) {
-      return { success: false, error: "El mensaje es obligatorio." };
+  if (!message || !title) {
+      return { success: false, error: "El título y el mensaje son obligatorios." };
   }
   
   const notificationData = {
+      title,
       message,
-      imageUrl: imageUrl || undefined,
-      linkUrl: linkUrl || undefined,
+      image_url: imageUrl || undefined,
+      link_url: linkUrl || undefined,
   };
   
   try {

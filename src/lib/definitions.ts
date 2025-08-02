@@ -29,6 +29,7 @@ export type Admin = {
 
 export type Notification = {
   id: number;
+  title: string;
   message: string;
   image_url?: string;
   link_url?: string;

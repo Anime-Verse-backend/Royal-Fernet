@@ -637,17 +637,21 @@ export default function AdminDashboardPage() {
                             </CardHeader>
                             <CardContent>
                                 <form ref={notificationFormRef} onSubmit={handleNotificationSubmit} className="flex flex-col gap-4">
+                                     <div className="grid gap-2">
+                                        <Label htmlFor="title">Título</Label>
+                                        <Input id="title" name="title" placeholder="¡Nuevo Lanzamiento!" required />
+                                    </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="message">Mensaje</Label>
                                         <Textarea id="message" name="message" placeholder="¡Anuncia una nueva oferta!" required />
                                     </div>
                                     <div className="grid gap-2">
-                                        <Label htmlFor="imageUrl">URL de la Imagen (Opcional)</Label>
-                                        <Input id="imageUrl" name="imageUrl" placeholder="https://example.com/image.png" />
+                                        <Label htmlFor="image_url">URL de la Imagen (Opcional)</Label>
+                                        <Input id="image_url" name="image_url" placeholder="https://example.com/image.png" />
                                     </div>
                                     <div className="grid gap-2">
-                                        <Label htmlFor="linkUrl">URL del Enlace (Opcional)</Label>
-                                        <Input id="linkUrl" name="linkUrl" placeholder="https://your-store.com/sale" />
+                                        <Label htmlFor="link_url">URL del Enlace (Opcional)</Label>
+                                        <Input id="link_url" name="link_url" placeholder="https://your-store.com/sale" />
                                     </div>
                                     <Button type="submit" disabled={isSendingNotification} className="w-full">
                                         {isSendingNotification ? 'Enviando...' : 'Enviar Notificación'}
@@ -980,36 +984,23 @@ export default function AdminDashboardPage() {
                                 <CardDescription>Conoce a las personas detrás de la magia.</CardDescription>
                             </CardHeader>
                             <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
-                                <Card className="flex flex-col items-center p-6 text-center">
-                                    <Avatar className="h-24 w-24 mb-4">
-                                        <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 1" />
-                                        <AvatarFallback>JD</AvatarFallback>
-                                    </Avatar>
-                                    <h3 className="text-lg font-semibold">Juan Developer</h3>
-                                    <p className="text-muted-foreground">Lead Full-Stack Developer</p>
-                                    <p className="mt-2 text-sm text-center">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
-                                    <div className="flex gap-4 mt-4">
-                                        <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
-                                        <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
-                                        <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
-                                        <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
-                                    </div>
-                                </Card>
-                                <Card className="flex flex-col items-center p-6 text-center">
-                                    <Avatar className="h-24 w-24 mb-4">
-                                        <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 2" />
-                                        <AvatarFallback>AI</AvatarFallback>
-                                    </Avatar>
-                                    <h3 className="text-lg font-semibold">Ana Interfaz</h3>
-                                    <p className="text-muted-foreground">UI/UX Designer</p>
-                                    <p className="mt-2 text-sm text-center">Diseñando interfaces intuitivas y estéticamente agradables que mejoran la interacción del usuario.</p>
-                                     <div className="flex gap-4 mt-4">
-                                        <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
-                                        <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
-                                        <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
-                                        <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
-                                    </div>
-                                </Card>
+                                <Card className="flex flex-col items-center p-8 text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
+                  <Avatar className="h-32 w-32 mb-6">
+                      <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
+                      <AvatarFallback>JD</AvatarFallback>
+                  </Avatar>
+                  
+                  <h1 className="text-2xl font-semibold">Luis Miguel Fonce</h1>
+                  
+                  <p className="text-primary/80">Lead Full-Stack Developer</p>
+                  <p className="mt-4 text-sm text-muted-foreground flex-grow">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
+                  <div className="flex gap-4 mt-6">
+                      <Link href="https://api.whatsapp.com/send/?phone=573044065668&text=%C2%A1Hola,+Me+interesa+tu+trabajo+amigo" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-6 w-6" /></Link>
+                      <Link href="https://www.instagram.com/miguel_1068l/" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-6 w-6" /></Link>
+                      <Link href="https://www.facebook.com/luismiguel.fonceguaitero?locale=es_LA" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-6 w-6" /></Link>
+                      <Link href="https://github.com/MIGUEL6-BNX" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-6 w-6" /></Link>
+                  </div>
+              </Card>
                             </CardContent>
                         </Card>
                         <Card>
