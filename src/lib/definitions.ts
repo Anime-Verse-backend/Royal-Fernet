@@ -68,3 +68,5 @@ export interface StoreLocation {
   map_embed_url: string;
   image_url: string;
 }
+
+    

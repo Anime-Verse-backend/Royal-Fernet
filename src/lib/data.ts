@@ -156,3 +156,5 @@ export async function fetchTableContent(tableName: string): Promise<any[]> {
     return [];
   }
 }
+
+    

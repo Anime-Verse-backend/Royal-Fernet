@@ -10,7 +10,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { fetchProducts, fetchAdmins, fetchStoreSettings, fetchDbTables, fetchTableContent } from "@/lib/data";
+import { fetchProducts, fetchAdmins, fetchStoreSettings, fetchDbTables, fetchTableContent, fetchStores } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -48,10 +48,10 @@ import {
     TabsTrigger,
 } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PlusCircle, Edit, Trash2, Search, FileText, BellRing, Settings, XCircle, Github, Instagram, Facebook, Database } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, FileText, BellRing, Settings, XCircle, Github, Instagram, Facebook, Database, Store } from "lucide-react";
 import Image from "next/image";
 import Link from 'next/link';
-import { Product, Admin, StoreSettings, HeroSlide } from "@/lib/definitions";
+import { Product, Admin, StoreSettings, HeroSlide, StoreLocation } from "@/lib/definitions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,6 +74,108 @@ import {
 import { formatCurrency, getSafeImageUrl } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 
+// Main page component
+export default function AdminDashboardPage() {
+    return <DashboardContent />;
+}
+
+function DashboardContent() {
+    const [products, setProducts] = useState<Product[]>([]);
+    const [admins, setAdmins] = useState<Admin[]>([]);
+    const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [productCurrentPage, setProductCurrentPage] = useState(1);
+    
+    const { toast } = useToast();
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const productQuery = searchParams.get('q') || '';
+    const adminQuery = searchParams.get('admin_q') || '';
+    
+    useEffect(() => {
+        async function loadData() {
+            setLoading(true);
+            try {
+                const [productData, adminData, settingsData] = await Promise.all([
+                    fetchProducts(productQuery),
+                    fetchAdmins(adminQuery),
+                    fetchStoreSettings()
+                ]);
+                setProducts(productData);
+                setAdmins(adminData);
+                setStoreSettings(settingsData);
+            } catch (error) {
+                console.error("Failed to load dashboard data:", error);
+                toast({
+                    title: "Error de Carga",
+                    description: "No se pudieron cargar los datos del panel. Asegúrate de que el backend esté funcionando.",
+                    variant: 'destructive'
+                });
+            } finally {
+                setLoading(false);
+                setProductCurrentPage(1);
+            }
+        }
+        loadData();
+    }, [productQuery, adminQuery, toast]);
+    
+    const handleSearch = (term: string, type: 'product' | 'admin') => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (term) {
+            params.set(type === 'product' ? 'q' : 'admin_q', term);
+        } else {
+            params.delete(type === 'product' ? 'q' : 'admin_q');
+        }
+        router.replace(`/admin/dashboard?${params.toString()}`);
+    };
+
+    if (loading) {
+        return <div className="container mx-auto py-12 px-4 space-y-12"><Skeleton className="h-96 w-full" /></div>;
+    }
+
+    return (
+        <div className="container mx-auto py-12 px-4">
+            <h1 className="text-3xl font-bold font-headline mb-8">Panel de Administración</h1>
+
+            <Tabs defaultValue="products" className="w-full">
+                <TabsList className="grid w-full grid-cols-1 h-auto md:h-10 md:grid-cols-7 mb-6">
+                    <TabsTrigger value="overview">Resumen</TabsTrigger>
+                    <TabsTrigger value="products">Productos</TabsTrigger>
+                    <TabsTrigger value="stores">Tiendas</TabsTrigger>
+                    <TabsTrigger value="admins">Admins</TabsTrigger>
+                    <TabsTrigger value="settings">Configuración</TabsTrigger>
+                    <TabsTrigger value="database">Base de Datos</TabsTrigger>
+                    <TabsTrigger value="developers">Desarrolladores</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="overview">
+                    <OverviewTab products={products} />
+                </TabsContent>
+                <TabsContent value="products">
+                   <ProductsTab products={products} currentPage={productCurrentPage} setCurrentPage={setProductCurrentPage} onSearch={handleSearch} query={productQuery} />
+                </TabsContent>
+                <TabsContent value="stores">
+                    <StoresTab />
+                </TabsContent>
+                <TabsContent value="admins">
+                   <AdminsTab admins={admins} onSearch={handleSearch} query={adminQuery}/>
+                </TabsContent>
+                <TabsContent value="settings">
+                    <SettingsTab settings={storeSettings} />
+                </TabsContent>
+                <TabsContent value="database">
+                    <DatabaseViewer />
+                </TabsContent>
+                <TabsContent value="developers">
+                    <DevelopersTab />
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
+}
+
+
+// ... Rest of the components (OverviewTab, ProductsTab, etc.) will go here
 const WhatsappIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg viewBox="0 0 32 32" fill="currentColor" {...props}>
       <path d="M19.11 17.205c-.372 0-1.088 1.39-1.518 1.39a.63.63 0 01-.315-.1c-.802-.402-1.504-.817-2.163-1.447-.545-.516-1.146-1.29-1.46-1.963a.426.426 0 01-.073-.215c0-.33.99-.945.99-1.49 0-.143-.73-2.09-.832-2.335-.143-.372-.214-.487-.6-.487-.187 0-.36-.044-.53-.044-.302 0-.53.115-.746.315-.688.645-1.032 1.318-1.06 2.264v.114c-.015.99.472 1.977 1.017 2.78 1.23 1.82 2.506 3.41 4.554 4.34.616.287 2.035.888 2.722.888.817 0 2.15-.515 2.52-1.29.372-.775.372-1.457.234-1.828-.156-.389-.42-.516-.6-.516h-.114zM16 2.098a13.91 13.91 0 00-13.908 13.909c0 4.38 2.016 8.33 5.303 10.942l-1.6 5.844 5.973-1.566c1.63.888 3.444 1.374 5.292 1.374a13.91 13.91 0 100-27.817z" />
@@ -443,68 +545,16 @@ function DatabaseViewer() {
     )
 }
 
-// Main page component
-export default function AdminDashboardPage() {
-    const [products, setProducts] = useState<Product[]>([]);
-    const [admins, setAdmins] = useState<Admin[]>([]);
-    const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
-    const [isAdminDialogOpen, setIsAdminDialogOpen] = useState(false);
-    const [isGenerating, setIsGenerating] = useState(false);
+function OverviewTab({ products }: { products: Product[] }) {
     const [isSendingNotification, setIsSendingNotification] = useState(false);
-    const [productCurrentPage, setProductCurrentPage] = useState(1);
-    
-    // State for multi-product invoice
+    const [isGenerating, setIsGenerating] = useState(false);
     const [invoiceItems, setInvoiceItems] = useState<{ product: Product; quantity: number }[]>([]);
     const [customerName, setCustomerName] = useState('');
     const [selectedInvoiceProduct, setSelectedInvoiceProduct] = useState<string>('');
     const [selectedInvoiceQuantity, setSelectedInvoiceQuantity] = useState<number>(1);
     
     const notificationFormRef = React.useRef<HTMLFormElement>(null);
-
     const { toast } = useToast();
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const productQuery = searchParams.get('q') || '';
-    const adminQuery = searchParams.get('admin_q') || '';
-    
-    useEffect(() => {
-        async function loadData() {
-            setLoading(true);
-            try {
-                const [productData, adminData, settingsData] = await Promise.all([
-                    fetchProducts(productQuery),
-                    fetchAdmins(adminQuery),
-                    fetchStoreSettings()
-                ]);
-                setProducts(productData);
-                setAdmins(adminData);
-                setStoreSettings(settingsData);
-            } catch (error) {
-                console.error("Failed to load dashboard data:", error);
-                toast({
-                    title: "Error de Carga",
-                    description: "No se pudieron cargar los datos del panel. Asegúrate de que el backend esté funcionando.",
-                    variant: 'destructive'
-                });
-            } finally {
-                setLoading(false);
-                setProductCurrentPage(1);
-            }
-        }
-        loadData();
-    }, [productQuery, adminQuery, toast]);
-    
-    const handleSearch = (term: string, type: 'product' | 'admin') => {
-        const params = new URLSearchParams(searchParams.toString());
-        if (term) {
-            params.set(type === 'product' ? 'q' : 'admin_q', term);
-        } else {
-            params.delete(type === 'product' ? 'q' : 'admin_q');
-        }
-        router.replace(`/admin/dashboard?${params.toString()}`);
-    };
 
     const handleAddInvoiceItem = () => {
         if (!selectedInvoiceProduct || selectedInvoiceQuantity < 1) {
@@ -579,15 +629,13 @@ export default function AdminDashboardPage() {
             toast({ title: "Éxito", description: "La factura se ha descargado." });
             setInvoiceItems([]);
             setCustomerName('');
-            fetchProducts(productQuery).then(setProducts);
-
+            // You might want to refresh products list here if stock changes are critical to show immediately
         } catch (error: any) {
             toast({ title: "Error de Factura", description: error.message, variant: 'destructive' });
         } finally {
             setIsGenerating(false);
         }
     };
-
 
     const handleNotificationSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -604,423 +652,583 @@ export default function AdminDashboardPage() {
         setIsSendingNotification(false);
     };
 
-    const productsPerPage = 10;
-    const indexOfLastProduct = productCurrentPage * productsPerPage;
-    const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
-    const currentProducts = products.slice(indexOfFirstProduct, indexOfLastProduct);
-    const totalProductPages = Math.ceil(products.length / productsPerPage);
-
-    if (loading) {
-        return <div className="container mx-auto py-12 px-4 space-y-12"><Skeleton className="h-96 w-full" /></div>;
-    }
-
     return (
-        <div className="container mx-auto py-12 px-4">
-            <h1 className="text-3xl font-bold font-headline mb-8">Panel de Administración</h1>
-
-            <Tabs defaultValue="products" className="w-full">
-                <TabsList className="grid w-full grid-cols-1 h-auto md:h-10 md:grid-cols-6 mb-6">
-                    <TabsTrigger value="overview">Resumen</TabsTrigger>
-                    <TabsTrigger value="products">Productos</TabsTrigger>
-                    <TabsTrigger value="admins">Administradores</TabsTrigger>
-                    <TabsTrigger value="settings">Configuración</TabsTrigger>
-                    <TabsTrigger value="database">Base de Datos</TabsTrigger>
-                    <TabsTrigger value="developers">Desarrolladores</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview">
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Enviar Notificación Personalizada</CardTitle>
-                                <BellRing className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <form ref={notificationFormRef} onSubmit={handleNotificationSubmit} className="flex flex-col gap-4">
-                                     <div className="grid gap-2">
-                                        <Label htmlFor="title">Título</Label>
-                                        <Input id="title" name="title" placeholder="¡Nuevo Lanzamiento!" required />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="message">Mensaje</Label>
-                                        <Textarea id="message" name="message" placeholder="¡Anuncia una nueva oferta!" required />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="image_url">URL de la Imagen (Opcional)</Label>
-                                        <Input id="image_url" name="image_url" placeholder="https://example.com/image.png" />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="link_url">URL del Enlace (Opcional)</Label>
-                                        <Input id="link_url" name="link_url" placeholder="https://your-store.com/sale" />
-                                    </div>
-                                    <Button type="submit" disabled={isSendingNotification} className="w-full">
-                                        {isSendingNotification ? 'Enviando...' : 'Enviar Notificación'}
-                                    </Button>
-                                </form>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Generador de Facturas</CardTitle>
-                                <CardDescription>Añade productos para generar y descargar una factura en formato .docx.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleInvoiceSubmit} className="space-y-6">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="customerName">Nombre del Cliente</Label>
-                                        <Input id="customerName" name="customerName" placeholder="John Doe" required value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-                                    </div>
-                                    
-                                    {invoiceItems.length > 0 && (
-                                        <div className="rounded-md border">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Producto</TableHead>
-                                                        <TableHead>Cant.</TableHead>
-                                                        <TableHead className="text-right">Acción</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {invoiceItems.map(item => (
-                                                        <TableRow key={item.product.id}>
-                                                            <TableCell>{item.product.name}</TableCell>
-                                                            <TableCell>{item.quantity}</TableCell>
-                                                            <TableCell className="text-right">
-                                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveInvoiceItem(item.product.id)}>
-                                                                    <XCircle className="h-4 w-4 text-destructive" />
-                                                                </Button>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </div>
-                                    )}
-
-                                    <div className="flex items-end gap-2">
-                                        <div className="flex-1 grid gap-2">
-                                            <Label htmlFor="product-select">Producto</Label>
-                                            <Select value={selectedInvoiceProduct} onValueChange={setSelectedInvoiceProduct}>
-                                                <SelectTrigger id="product-select">
-                                                    <SelectValue placeholder="Selecciona un producto" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {products.filter(p => p.stock > 0).map((product) => (
-                                                        <SelectItem key={product.id} value={product.id}>
-                                                            {product.name} (Stock: {product.stock})
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="grid gap-2 w-24">
-                                            <Label htmlFor="quantity">Cantidad</Label>
-                                            <Input id="quantity" type="number" value={selectedInvoiceQuantity} onChange={(e) => setSelectedInvoiceQuantity(Number(e.target.value))} min="1" />
-                                        </div>
-                                        <Button type="button" onClick={handleAddInvoiceItem}>Añadir</Button>
-                                    </div>
-                                    
-                                    <Button type="submit" disabled={isGenerating || invoiceItems.length === 0} className="w-full">
-                                        {isGenerating ? 'Generando...' : 'Generar y Descargar Factura'}
-                                    </Button>
-                                </form>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="products">
-                   <Card>
-                        <CardHeader>
-                            <div className="flex flex-col items-start gap-4 md:flex-row md:items-center md:justify-between">
-                                <div>
-                                    <CardTitle>Gestión de Productos</CardTitle>
-                                    <CardDescription>Añade, edita y elimina productos de tu tienda.</CardDescription>
-                                </div>
-                                <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
-                                    <DialogTrigger asChild>
-                                        <Button>
-                                            <PlusCircle className="mr-2 h-4 w-4" />
-                                            Añadir Producto
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-                                        <DialogHeader>
-                                            <DialogTitle>Añadir Nuevo Producto</DialogTitle>
-                                            <DialogDescription>
-                                                Rellena los detalles del nuevo producto. Haz clic en añadir cuando hayas terminado.
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <ProductForm onFormSubmit={() => setIsProductDialogOpen(false)} />
-                                    </DialogContent>
-                                </Dialog>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input 
-                                    type="search" 
-                                    placeholder="Buscar productos..." 
-                                    className="pl-8" 
-                                    defaultValue={productQuery}
-                                    onChange={(e) => handleSearch(e.target.value, 'product')}
-                                />
-                            </div>
-                            <div className="rounded-lg border">
+        <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Enviar Notificación Personalizada</CardTitle>
+                    <BellRing className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <form ref={notificationFormRef} onSubmit={handleNotificationSubmit} className="flex flex-col gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="title">Título</Label>
+                            <Input id="title" name="title" placeholder="¡Nuevo Lanzamiento!" required />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="message">Mensaje</Label>
+                            <Textarea id="message" name="message" placeholder="¡Anuncia una nueva oferta!" required />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="image_url">URL de la Imagen (Opcional)</Label>
+                            <Input id="image_url" name="image_url" placeholder="https://example.com/image.png" />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="link_url">URL del Enlace (Opcional)</Label>
+                            <Input id="link_url" name="link_url" placeholder="https://your-store.com/sale" />
+                        </div>
+                        <Button type="submit" disabled={isSendingNotification} className="w-full">
+                            {isSendingNotification ? 'Enviando...' : 'Enviar Notificación'}
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Generador de Facturas</CardTitle>
+                    <CardDescription>Añade productos para generar y descargar una factura en formato .docx.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleInvoiceSubmit} className="space-y-6">
+                        <div className="grid gap-2">
+                            <Label htmlFor="customerName">Nombre del Cliente</Label>
+                            <Input id="customerName" name="customerName" placeholder="John Doe" required value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+                        </div>
+                        
+                        {invoiceItems.length > 0 && (
+                            <div className="rounded-md border">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="w-[80px]">Imagen</TableHead>
-                                            <TableHead>Nombre</TableHead>
-                                            <TableHead>Categoría</TableHead>
-                                            <TableHead>Precio</TableHead>
-                                            <TableHead>Stock</TableHead>
-                                            <TableHead>Destacado</TableHead>
-                                            <TableHead className="text-right">Acciones</TableHead>
+                                            <TableHead>Producto</TableHead>
+                                            <TableHead>Cant.</TableHead>
+                                            <TableHead className="text-right">Acción</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {currentProducts.map((product) => {
-                                            const safeImageUrl = getSafeImageUrl(product.images?.[0]);
-
-                                            return (
-                                                <TableRow key={product.id}>
-                                                    <TableCell>
-                                                        <Image 
-                                                            src={safeImageUrl}
-                                                            alt={product.name}
-                                                            width={40}
-                                                            height={40}
-                                                            className="rounded-md object-cover"
-                                                        />
-                                                    </TableCell>
-                                                    <TableCell className="font-medium">{product.name}</TableCell>
-                                                    <TableCell>{product.category}</TableCell>
-                                                    <TableCell>{formatCurrency(product.price)}</TableCell>
-                                                    <TableCell>{product.stock}</TableCell>
-                                                    <TableCell>{product.is_featured ? 'Sí' : 'No'}</TableCell>
-                                                    <TableCell className="text-right">
-                                                        <Dialog>
-                                                            <DialogTrigger asChild>
-                                                                <Button variant="ghost" size="icon">
-                                                                    <Edit className="h-4 w-4" />
-                                                                    <span className="sr-only">Edit</span>
-                                                                </Button>
-                                                            </DialogTrigger>
-                                                            <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-                                                                <DialogHeader>
-                                                                    <DialogTitle>Editar Producto</DialogTitle>
-                                                                    <DialogDescription>
-                                                                        Realiza cambios en los detalles del producto. Haz clic en guardar cuando hayas terminado.
-                                                                    </DialogDescription>
-                                                                </DialogHeader>
-                                                                <ProductForm product={product} onFormSubmit={() => { /* no-op */ }} />
-                                                            </DialogContent>
-                                                        </Dialog>
-                                                        <AlertDialog>
-                                                            <AlertDialogTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                    <span className="sr-only">Delete</span>
-                                                                </Button>
-                                                            </AlertDialogTrigger>
-                                                            <AlertDialogContent>
-                                                                <AlertDialogHeader>
-                                                                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                                                                    <AlertDialogDescription>
-                                                                        Esta acción no se puede deshacer. Esto eliminará permanentemente el producto.
-                                                                    </AlertDialogDescription>
-                                                                </AlertDialogHeader>
-                                                                <AlertDialogFooter>
-                                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                    <form action={deleteProduct.bind(null, product.id)}>
-                                                                        <AlertDialogAction type="submit">Eliminar</AlertDialogAction>
-                                                                    </form>
-                                                                </AlertDialogFooter>
-                                                            </AlertDialogContent>
-                                                        </AlertDialog>
-                                                    </TableCell>
-                                                </TableRow>
-                                            )
-                                        })}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                            {totalProductPages > 1 && (
-                                <div className="flex items-center justify-end space-x-2 py-4">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setProductCurrentPage(productCurrentPage - 1)}
-                                        disabled={productCurrentPage === 1}
-                                    >
-                                        Anterior
-                                    </Button>
-                                    <span className="text-sm text-muted-foreground">
-                                        Página {productCurrentPage} de {totalProductPages}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setProductCurrentPage(productCurrentPage + 1)}
-                                        disabled={productCurrentPage === totalProductPages}
-                                    >
-                                        Siguiente
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="admins">
-                   <Card>
-                        <CardHeader>
-                            <div className="flex flex-col items-start gap-4 md:flex-row md:items-center md:justify-between">
-                                <div>
-                                    <CardTitle>Gestión de Administradores</CardTitle>
-                                    <CardDescription>Añade y elimina los administradores de la tienda.</CardDescription>
-                                </div>
-                                <Dialog open={isAdminDialogOpen} onOpenChange={setIsAdminDialogOpen}>
-                                    <DialogTrigger asChild>
-                                        <Button>
-                                            <PlusCircle className="mr-2 h-4 w-4" />
-                                            Añadir Admin
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="sm:max-w-[425px]">
-                                        <DialogHeader>
-                                            <DialogTitle>Añadir Nuevo Admin</DialogTitle>
-                                            <DialogDescription>
-                                                Rellena los detalles del nuevo administrador.
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <AdminForm onFormSubmit={() => setIsAdminDialogOpen(false)}/>
-                                    </DialogContent>
-                                </Dialog>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input 
-                                    type="search" 
-                                    placeholder="Buscar admins por nombre o email..." 
-                                    className="pl-8" 
-                                    defaultValue={adminQuery}
-                                    onChange={(e) => handleSearch(e.target.value, 'admin')}
-                                />
-                            </div>
-                            <div className="rounded-lg border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Nombre</TableHead>
-                                            <TableHead>Email</TableHead>
-                                            <TableHead className="text-right">Acciones</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {admins.map((admin) => (
-                                            <TableRow key={admin.id}>
-                                                <TableCell className="font-medium">{admin.name}</TableCell>
-                                                <TableCell>{admin.email}</TableCell>
+                                        {invoiceItems.map(item => (
+                                            <TableRow key={item.product.id}>
+                                                <TableCell>{item.product.name}</TableCell>
+                                                <TableCell>{item.quantity}</TableCell>
                                                 <TableCell className="text-right">
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                                                                <Trash2 className="h-4 w-4" />
-                                                                <span className="sr-only">Delete Admin</span>
-                                                            </Button>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>¿Estás realmente seguro?</AlertDialogTitle>
-                                                                <AlertDialogDescription>
-                                                                    Esta acción no se puede deshacer. Esto eliminará permanentemente al administrador <strong>{admin.name}</strong> y revocará su acceso. No puedes eliminar al último administrador.
-                                                                </AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                <form action={deleteAdmin.bind(null, admin.id)}>
-                                                                    <AlertDialogAction type="submit">Sí, eliminar administrador</AlertDialogAction>
-                                                                </form>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveInvoiceItem(item.product.id)}>
+                                                        <XCircle className="h-4 w-4 text-destructive" />
+                                                    </Button>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
                                 </Table>
                             </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                        )}
 
-                <TabsContent value="settings">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><Settings className="h-5 w-5" /> Configuración de la Tienda</CardTitle>
-                            <CardDescription>Modifica la información que se muestra en la página principal y el pie de página.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <StoreSettingsForm settings={storeSettings} />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="database">
-                    <DatabaseViewer />
-                </TabsContent>
-
-                <TabsContent value="developers">
-                    <div className="grid gap-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Equipo de Desarrollo</CardTitle>
-                                <CardDescription>Conoce a las personas detrás de la magia.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
-                                <Card className="flex flex-col items-center p-8 text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
-                  <Avatar className="h-32 w-32 mb-6">
-                      <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
-                      <AvatarFallback>JD</AvatarFallback>
-                  </Avatar>
-                  
-                  <h1 className="text-2xl font-semibold">Luis Miguel Fonce</h1>
-                  
-                  <p className="text-primary/80">Lead Full-Stack Developer</p>
-                  <p className="mt-4 text-sm text-muted-foreground flex-grow">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
-                  <div className="flex gap-4 mt-6">
-                      <Link href="https://api.whatsapp.com/send/?phone=573044065668&text=%C2%A1Hola,+Me+interesa+tu+trabajo+amigo" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-6 w-6" /></Link>
-                      <Link href="https://www.instagram.com/miguel_1068l/" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-6 w-6" /></Link>
-                      <Link href="https://www.facebook.com/luismiguel.fonceguaitero?locale=es_LA" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-6 w-6" /></Link>
-                      <Link href="https://github.com/MIGUEL6-BNX" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-6 w-6" /></Link>
-                  </div>
-              </Card>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Stack Tecnológico</CardTitle>
-                                <CardDescription>Las herramientas que hacen posible esta aplicación.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <ul className="list-disc list-inside space-y-2">
-                                    <li><span className="font-semibold">Framework:</span> Next.js (React)</li>
-                                    <li><span className="font-semibold">Estilos:</span> Tailwind CSS</li>
-                                    <li><span className="font-semibold">Componentes UI:</span> ShadCN/UI</li>
-                                    <li><span className="font-semibold">Backend:</span> Python (Flask) con PostgreSQL</li>
-                                    <li><span className="font-semibold">Hosting:</span> Render & Vercel</li>
-                                </ul>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </TabsContent>
-            </Tabs>
+                        <div className="flex items-end gap-2">
+                            <div className="flex-1 grid gap-2">
+                                <Label htmlFor="product-select">Producto</Label>
+                                <Select value={selectedInvoiceProduct} onValueChange={setSelectedInvoiceProduct}>
+                                    <SelectTrigger id="product-select">
+                                        <SelectValue placeholder="Selecciona un producto" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {products.filter(p => p.stock > 0).map((product) => (
+                                            <SelectItem key={product.id} value={product.id}>
+                                                {product.name} (Stock: {product.stock})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-2 w-24">
+                                <Label htmlFor="quantity">Cantidad</Label>
+                                <Input id="quantity" type="number" value={selectedInvoiceQuantity} onChange={(e) => setSelectedInvoiceQuantity(Number(e.target.value))} min="1" />
+                            </div>
+                            <Button type="button" onClick={handleAddInvoiceItem}>Añadir</Button>
+                        </div>
+                        
+                        <Button type="submit" disabled={isGenerating || invoiceItems.length === 0} className="w-full">
+                            {isGenerating ? 'Generando...' : 'Generar y Descargar Factura'}
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
         </div>
     );
 }
+
+function ProductsTab({ products, currentPage, setCurrentPage, onSearch, query }: { products: Product[], currentPage: number, setCurrentPage: (page: number) => void, onSearch: (term: string, type: 'product' | 'admin') => void, query: string }) {
+    const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+    const productsPerPage = 10;
+    const indexOfLastProduct = currentPage * productsPerPage;
+    const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
+    const currentProducts = products.slice(indexOfFirstProduct, indexOfLastProduct);
+    const totalProductPages = Math.ceil(products.length / productsPerPage);
+
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col items-start gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <CardTitle>Gestión de Productos</CardTitle>
+                        <CardDescription>Añade, edita y elimina productos de tu tienda.</CardDescription>
+                    </div>
+                    <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Añadir Producto
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>Añadir Nuevo Producto</DialogTitle>
+                                <DialogDescription>
+                                    Rellena los detalles del nuevo producto. Haz clic en añadir cuando hayas terminado.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <ProductForm onFormSubmit={() => setIsProductDialogOpen(false)} />
+                        </DialogContent>
+                    </Dialog>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        type="search" 
+                        placeholder="Buscar productos..." 
+                        className="pl-8" 
+                        defaultValue={query}
+                        onChange={(e) => onSearch(e.target.value, 'product')}
+                    />
+                </div>
+                <div className="rounded-lg border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-[80px]">Imagen</TableHead>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Categoría</TableHead>
+                                <TableHead>Precio</TableHead>
+                                <TableHead>Stock</TableHead>
+                                <TableHead>Destacado</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {currentProducts.map((product) => {
+                                const safeImageUrl = getSafeImageUrl(product.images?.[0]);
+
+                                return (
+                                    <TableRow key={product.id}>
+                                        <TableCell>
+                                            <Image 
+                                                src={safeImageUrl}
+                                                alt={product.name}
+                                                width={40}
+                                                height={40}
+                                                className="rounded-md object-cover"
+                                            />
+                                        </TableCell>
+                                        <TableCell className="font-medium">{product.name}</TableCell>
+                                        <TableCell>{product.category}</TableCell>
+                                        <TableCell>{formatCurrency(product.price)}</TableCell>
+                                        <TableCell>{product.stock}</TableCell>
+                                        <TableCell>{product.is_featured ? 'Sí' : 'No'}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Dialog>
+                                                <DialogTrigger asChild>
+                                                    <Button variant="ghost" size="icon">
+                                                        <Edit className="h-4 w-4" />
+                                                        <span className="sr-only">Edit</span>
+                                                    </Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+                                                    <DialogHeader>
+                                                        <DialogTitle>Editar Producto</DialogTitle>
+                                                        <DialogDescription>
+                                                            Realiza cambios en los detalles del producto. Haz clic en guardar cuando hayas terminado.
+                                                        </DialogDescription>
+                                                    </DialogHeader>
+                                                    <ProductForm product={product} onFormSubmit={() => { /* no-op */ }} />
+                                                </DialogContent>
+                                            </Dialog>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                                                        <Trash2 className="h-4 w-4" />
+                                                        <span className="sr-only">Delete</span>
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Esta acción no se puede deshacer. Esto eliminará permanentemente el producto.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                        <form action={deleteProduct.bind(null, product.id)}>
+                                                            <AlertDialogAction type="submit">Eliminar</AlertDialogAction>
+                                                        </form>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </TableCell>
+                                    </TableRow>
+                                )
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+                {totalProductPages > 1 && (
+                    <div className="flex items-center justify-end space-x-2 py-4">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(currentPage - 1)}
+                            disabled={currentPage === 1}
+                        >
+                            Anterior
+                        </Button>
+                        <span className="text-sm text-muted-foreground">
+                            Página {currentPage} de {totalProductPages}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(currentPage + 1)}
+                            disabled={currentPage === totalProductPages}
+                        >
+                            Siguiente
+                        </Button>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+function AdminsTab({ admins, onSearch, query }: { admins: Admin[], onSearch: (term: string, type: 'product' | 'admin') => void, query: string }) {
+    const [isAdminDialogOpen, setIsAdminDialogOpen] = useState(false);
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col items-start gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <CardTitle>Gestión de Administradores</CardTitle>
+                        <CardDescription>Añade y elimina los administradores de la tienda.</CardDescription>
+                    </div>
+                    <Dialog open={isAdminDialogOpen} onOpenChange={setIsAdminDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Añadir Admin
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                            <DialogHeader>
+                                <DialogTitle>Añadir Nuevo Admin</DialogTitle>
+                                <DialogDescription>
+                                    Rellena los detalles del nuevo administrador.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <AdminForm onFormSubmit={() => setIsAdminDialogOpen(false)}/>
+                        </DialogContent>
+                    </Dialog>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        type="search" 
+                        placeholder="Buscar admins por nombre o email..." 
+                        className="pl-8" 
+                        defaultValue={query}
+                        onChange={(e) => onSearch(e.target.value, 'admin')}
+                    />
+                </div>
+                <div className="rounded-lg border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {admins.map((admin) => (
+                                <TableRow key={admin.id}>
+                                    <TableCell className="font-medium">{admin.name}</TableCell>
+                                    <TableCell>{admin.email}</TableCell>
+                                    <TableCell className="text-right">
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                                                    <Trash2 className="h-4 w-4" />
+                                                    <span className="sr-only">Delete Admin</span>
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>¿Estás realmente seguro?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Esta acción no se puede deshacer. Esto eliminará permanentemente al administrador <strong>{admin.name}</strong> y revocará su acceso. No puedes eliminar al último administrador.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <form action={deleteAdmin.bind(null, admin.id)}>
+                                                        <AlertDialogAction type="submit">Sí, eliminar administrador</AlertDialogAction>
+                                                    </form>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+function SettingsTab({ settings }: { settings: StoreSettings | null }) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Settings className="h-5 w-5" /> Configuración de la Tienda</CardTitle>
+                <CardDescription>Modifica la información que se muestra en la página principal y el pie de página.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <StoreSettingsForm settings={settings} />
+            </CardContent>
+        </Card>
+    );
+}
+
+function DevelopersTab() {
+    return (
+        <div className="grid gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Equipo de Desarrollo</CardTitle>
+                    <CardDescription>Conoce a las personas detrás de la magia.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
+                    <Card className="flex flex-col items-center p-6 text-center">
+                        <Avatar className="h-24 w-24 mb-4">
+                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 1" />
+                            <AvatarFallback>JD</AvatarFallback>
+                        </Avatar>
+                        <h3 className="text-lg font-semibold">Juan Developer</h3>
+                        <p className="text-muted-foreground">Lead Full-Stack Developer</p>
+                        <p className="mt-2 text-sm text-center">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
+                        <div className="flex gap-4 mt-4">
+                            <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
+                        </div>
+                    </Card>
+                    <Card className="flex flex-col items-center p-6 text-center">
+                        <Avatar className="h-24 w-24 mb-4">
+                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 2" />
+                            <AvatarFallback>AI</AvatarFallback>
+                        </Avatar>
+                        <h3 className="text-lg font-semibold">Ana Interfaz</h3>
+                        <p className="text-muted-foreground">UI/UX Designer</p>
+                        <p className="mt-2 text-sm text-center">Diseñando interfaces intuitivas y estéticamente agradables que mejoran la interacción del usuario.</p>
+                            <div className="flex gap-4 mt-4">
+                            <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
+                        </div>
+                    </Card>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Stack Tecnológico</CardTitle>
+                    <CardDescription>Las herramientas que hacen posible esta aplicación.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ul className="list-disc list-inside space-y-2">
+                        <li><span className="font-semibold">Framework:</span> Next.js (React)</li>
+                        <li><span className="font-semibold">Estilos:</span> Tailwind CSS</li>
+                        <li><span className="font-semibold">Componentes UI:</span> ShadCN/UI</li>
+                        <li><span className="font-semibold">Backend:</span> Python (Flask) con PostgreSQL</li>
+                        <li><span className="font-semibold">Hosting:</span> Render & Vercel</li>
+                    </ul>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+function StoresTab() {
+    const [stores, setStores] = useState<StoreLocation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingStore, setEditingStore] = useState<StoreLocation | null>(null);
+
+    const { toast } = useToast();
+
+    const loadStores = async () => {
+        setLoading(true);
+        const storesData = await fetchStores();
+        setStores(storesData);
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        loadStores();
+    }, []);
+
+    const handleOpenDialog = (store: StoreLocation | null = null) => {
+        setEditingStore(store);
+        setIsDialogOpen(true);
+    };
+
+    const handleCloseDialog = () => {
+        setIsDialogOpen(false);
+        setEditingStore(null);
+    };
+
+    const handleFormSubmit = () => {
+        handleCloseDialog();
+        loadStores();
+        toast({ title: "Éxito", description: `Tienda ${editingStore ? 'actualizada' : 'creada'} correctamente.` });
+        revalidatePath('/stores');
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <CardTitle>Gestión de Tiendas</CardTitle>
+                        <CardDescription>Añade, edita y elimina las ubicaciones de tus tiendas.</CardDescription>
+                    </div>
+                    <Button onClick={() => handleOpenDialog()}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Añadir Tienda
+                    </Button>
+                </div>
+            </CardHeader>
+            <CardContent>
+                {loading ? (
+                    <Skeleton className="h-48 w-full" />
+                ) : (
+                    <div className="rounded-lg border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Nombre</TableHead>
+                                    <TableHead>Ciudad</TableHead>
+                                    <TableHead>Dirección</TableHead>
+                                    <TableHead className="text-right">Acciones</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stores.map((store) => (
+                                    <TableRow key={store.id}>
+                                        <TableCell className="font-medium">{store.name}</TableCell>
+                                        <TableCell>{store.city}</TableCell>
+                                        <TableCell>{store.address}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(store)}>
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                            {/* Delete button would go here */}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
+                 {isDialogOpen && (
+                    <StoreFormDialog
+                        isOpen={isDialogOpen}
+                        onClose={handleCloseDialog}
+                        onSubmitSuccess={handleFormSubmit}
+                        store={editingStore}
+                    />
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+function StoreFormDialog({ isOpen, onClose, onSubmitSuccess, store }: { isOpen: boolean, onClose: () => void, onSubmitSuccess: () => void, store: StoreLocation | null }) {
+    const { toast } = useToast();
+
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        
+        const url = store ? `/api/stores/${store.id}` : '/api/stores';
+        const method = store ? 'PUT' : 'POST';
+
+        const response = await fetch(url, { method, body: formData });
+        
+        if (response.ok) {
+            onSubmitSuccess();
+        } else {
+            toast({ title: "Error", description: "No se pudo guardar la tienda.", variant: "destructive" });
+        }
+    };
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{store ? 'Editar Tienda' : 'Añadir Nueva Tienda'}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="grid gap-4 py-4" encType="multipart/form-data">
+                    <div className="grid gap-2">
+                        <Label htmlFor="name">Nombre</Label>
+                        <Input id="name" name="name" defaultValue={store?.name} required />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="address">Dirección</Label>
+                        <Input id="address" name="address" defaultValue={store?.address} required />
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="city">Ciudad</Label>
+                        <Input id="city" name="city" defaultValue={store?.city} required />
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="phone">Teléfono</Label>
+                        <Input id="phone" name="phone" defaultValue={store?.phone} required />
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="hours">Horario</Label>
+                        <Input id="hours" name="hours" defaultValue={store?.hours} required />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="mapEmbedUrl">URL de Google Maps (Embed)</Label>
+                        <Textarea id="mapEmbedUrl" name="mapEmbedUrl" defaultValue={store?.map_embed_url} required />
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="imageFile">Imagen de la Tienda</Label>
+                         <Input id="imageFile" name="imageFile" type="file" accept="image/*" />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild><Button type="button" variant="secondary">Cancelar</Button></DialogClose>
+                        <Button type="submit">{store ? 'Guardar Cambios' : 'Añadir Tienda'}</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+
+    

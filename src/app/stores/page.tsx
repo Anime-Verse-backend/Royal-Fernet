@@ -1,9 +1,8 @@
 
+import * as React from 'react';
 import { fetchStores } from '@/lib/data';
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import { MapPin, Phone, Clock } from 'lucide-react';
-import { getSafeImageUrl } from '@/lib/utils';
 
 export const metadata: Metadata = {
     title: 'Nuestras Tiendas - Royal-Fernet',
@@ -66,3 +65,5 @@ export default async function StoresPage() {
         </div>
     );
 }
+
+    

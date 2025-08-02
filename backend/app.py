@@ -435,7 +435,7 @@ def handle_stores():
                 return jsonify(new_store), 201
 
             # GET all stores
-            cursor.execute("SELECT * FROM store_locations")
+            cursor.execute("SELECT * FROM store_locations ORDER BY id")
             stores = [dict(row) for row in cursor.fetchall()]
             for s in stores:
                 s['image_url'] = make_image_url_absolute(s.get('image_url'))
@@ -667,5 +667,7 @@ if __name__ == '__main__':
     
 
 
+
+    
 
     
