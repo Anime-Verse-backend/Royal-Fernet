@@ -419,7 +419,7 @@ def handle_stores():
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
                 data = request.form
-                image_url = data.get('imageUrl', '')
+                image_url = data.get('imageUrl', '');
                 if 'imageFile' in request.files and request.files['imageFile'].filename != '':
                     file = request.files['imageFile']
                     if file and allowed_file(file.filename):
@@ -668,3 +668,4 @@ if __name__ == '__main__':
 
 
 
+    
