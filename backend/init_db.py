@@ -30,9 +30,6 @@ def initialize_database():
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            # In PostgreSQL, we don't need to create the database, Render does it for us.
-            # We just create the tables if they don't exist.
-            
             # --- Table Creation ---
             tables = {
                 "users": """
@@ -167,6 +164,26 @@ def seed_data():
         if conn:
             conn.close()
 
-if __name__ == '__main__':
+def main():
+    """Main function to initialize and optionally seed the database."""
     initialize_database()
-    seed_data()
+    
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Check if the 'products' table has any data. If not, it's a fresh DB.
+            cursor.execute("SELECT COUNT(*) as count FROM products")
+            if cursor.fetchone()[0] == 0:
+                print("Database appears to be empty. Seeding with initial data.")
+                seed_data()
+            else:
+                print("Database already contains data. Skipping seeding.")
+    finally:
+        if conn:
+            conn.close()
+
+
+if __name__ == '__main__':
+    main()
+
+    
