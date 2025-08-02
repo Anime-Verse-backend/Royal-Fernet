@@ -14,7 +14,6 @@ logging.basicConfig(level=logging.INFO)
 # --- Database Connection ---
 def get_db_connection():
     try:
-        # Render provides the DATABASE_URL env var.
         conn_string = os.getenv('DATABASE_URL')
         if not conn_string:
             raise ValueError("DATABASE_URL environment variable is not set for init_db.")
@@ -25,6 +24,25 @@ def get_db_connection():
     except psycopg2.Error as e:
         logging.error(f"Error connecting to PostgreSQL server in init_db: {e}")
         exit(1)
+
+def alter_notifications_table(cursor):
+    """Checks for the existence of the 'title' column and adds it if it doesn't exist."""
+    try:
+        # Check if the column 'title' exists
+        cursor.execute("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='notifications' AND column_name='title';
+        """)
+        exists = cursor.fetchone()
+        if not exists:
+            cursor.execute("ALTER TABLE notifications ADD COLUMN title TEXT;")
+            print("   - Column 'title' added to 'notifications' table.")
+        else:
+            print("   - Column 'title' already exists in 'notifications' table.")
+
+    except psycopg2.Error as e:
+        print(f"   - Could not alter 'notifications' table: {e}")
+        # It's okay to pass here if the table doesn't exist yet, it will be created.
 
 def initialize_database():
     conn = get_db_connection()
@@ -75,7 +93,6 @@ def initialize_database():
                 "notifications": """
                     CREATE TABLE IF NOT EXISTS notifications (
                         id SERIAL PRIMARY KEY,
-                        title TEXT,
                         message TEXT NOT NULL,
                         image_url VARCHAR(2048),
                         link_url VARCHAR(2048),
@@ -91,7 +108,7 @@ def initialize_database():
                         phone VARCHAR(50) NOT NULL,
                         hours VARCHAR(255) NOT NULL,
                         map_embed_url TEXT,
-                        image_url VARCHAR(2048)
+                        image_url TEXT
                     )
                 """
             }
@@ -99,6 +116,10 @@ def initialize_database():
             for table_name, create_statement in tables.items():
                 cursor.execute(create_statement)
                 print(f"✅ Table '{table_name}' created or already exists.")
+
+            # --- Table Alterations ---
+            # Specifically ensure the 'notifications' table has the 'title' column
+            alter_notifications_table(cursor)
             
             conn.commit()
             print("\n🎉 Database schema initialization complete!")
@@ -186,7 +207,5 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-    
 
     
