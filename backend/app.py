@@ -293,17 +293,34 @@ def handle_settings():
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
                 data = request.form
+                # Start with existing hero images from form data URL fields
                 hero_images_json = data.get('heroImages', '[]')
                 hero_images_data = json.loads(hero_images_json)
                 processed_hero_images = []
+
+                # Use a consistent API base URL for stripping prefixes
+                api_base_url = os.getenv('API_BASE_URL', request.host_url).rstrip('/')
+
                 for index, slide in enumerate(hero_images_data):
                     file_key = f'heroImageFile_{index}'
+                    url_key = f'heroImageUrl_{index}'
+                    
+                    # 1. Check for a newly uploaded file
                     if file_key in request.files and request.files[file_key].filename != '':
                         file = request.files[file_key]
                         if file and allowed_file(file.filename):
                             filename = secure_filename(f"setting_hero_{uuid.uuid4()}_{file.filename}")
                             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                             slide['imageUrl'] = f"/uploads/{filename}"
+                    # 2. Check for an existing URL (from hidden input)
+                    elif data.get(url_key):
+                        existing_url = data.get(url_key)
+                        # Strip the base URL if present, to store a relative path
+                        if existing_url.startswith(api_base_url):
+                            slide['imageUrl'] = existing_url.replace(api_base_url, '', 1)
+                        else:
+                            slide['imageUrl'] = existing_url
+                    
                     processed_hero_images.append(slide)
 
                 sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url)
@@ -330,7 +347,8 @@ def handle_settings():
                 settings = dict(cursor.fetchone())
                 conn.commit()
                 if settings and settings.get('hero_images'):
-                    settings['heroImages'] = process_image_paths_for_response(settings['hero_images'])
+                     # The field is named 'hero_images' in the DB, not 'heroImages'
+                    settings['hero_images'] = process_image_paths_for_response(settings['hero_images'])
                 return jsonify(settings)
             
             # GET request
@@ -339,9 +357,19 @@ def handle_settings():
             if settings:
                 settings_dict = dict(settings)
                 if settings_dict.get('hero_images'):
-                    settings_dict['heroImages'] = process_image_paths_for_response(settings_dict['hero_images'])
+                    # The field is named 'hero_images' in the DB
+                    processed_slides = []
+                    for slide in settings_dict['hero_images']:
+                        if 'imageUrl' in slide:
+                            slide['imageUrl'] = make_image_url_absolute(slide['imageUrl'])
+                        processed_slides.append(slide)
+                    settings_dict['hero_images'] = processed_slides
+
                 return jsonify(settings_dict)
             return jsonify({}), 404
+    except Exception as e:
+        app.logger.error(f"Error in handle_settings: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
     finally:
         if conn:
             conn.close()
@@ -375,7 +403,7 @@ def get_latest_notification():
                 return jsonify({'error': 'No notifications found'}), 404
             notification_dict = dict(notification)
             if notification_dict.get('image_url'):
-                notification_dict['imageUrl'] = make_image_url_absolute(notification_dict['image_url'])
+                notification_dict['image_url'] = make_image_url_absolute(notification_dict['image_url'])
             return jsonify(notification_dict)
     finally:
         if conn:
@@ -408,7 +436,7 @@ def handle_stores():
             cursor.execute("SELECT * FROM store_locations")
             stores = [dict(row) for row in cursor.fetchall()]
             for s in stores:
-                s['imageUrl'] = make_image_url_absolute(s.get('image_url'))
+                s['image_url'] = make_image_url_absolute(s.get('image_url'))
             return jsonify(stores)
     finally:
         if conn:

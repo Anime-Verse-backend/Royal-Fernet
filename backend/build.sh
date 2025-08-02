@@ -2,11 +2,10 @@
 # exit on error
 set -o errexit
 
-echo "Installing dependencies..."
-pip install -r requirements.txt
-
 echo "Initializing the database..."
 python init_db.py
 
-echo "Build finished. Starting Gunicorn..."
+echo "Database initialized. Starting Gunicorn..."
+# The port is automatically set by Render.
+# The worker-tmp-dir is a fix for some file system issues on Render.
 exec gunicorn --worker-tmp-dir /dev/shm app:app
