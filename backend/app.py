@@ -2,7 +2,7 @@
 import os
 import uuid
 import json
-import pymysql
+import psycopg2
 import io
 import qrcode
 import logging
@@ -27,33 +27,17 @@ CORS(app, resources={r"/*": {"origins": [FRONTEND_URL, "http://localhost:9002"],
 
 # --- Database Connection Helper ---
 def get_db_connection():
-    ssl_args = {}
-    # Render's path for secret files
-    render_ca_path = '/etc/secrets/ca.pem' 
-    
-    if os.path.exists(render_ca_path):
-        app.logger.info("Found Render SSL certificate, using it for connection.")
-        ssl_args['ssl_ca'] = render_ca_path
-        ssl_args['ssl_verify_cert'] = True
-    else:
-        app.logger.warning("No SSL certificate found at /etc/secrets/ca.pem. Connection may fail if SSL is required.")
-    
     try:
-        connection = pymysql.connect(
-            host=os.getenv('DB_HOST'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_NAME'),
-            port=int(os.getenv('DB_PORT', 3306)),
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=20,
-            **ssl_args
-        )
-        app.logger.info("Successfully connected to the database.")
+        # Render provides the DATABASE_URL env var.
+        conn_string = os.getenv('DATABASE_URL')
+        if not conn_string:
+            raise ValueError("DATABASE_URL environment variable is not set.")
+        
+        connection = psycopg2.connect(conn_string)
+        app.logger.info("Successfully connected to the PostgreSQL database.")
         return connection
-    except pymysql.MySQLError as e:
-        app.logger.error(f"Error connecting to MySQL database: {e}")
+    except psycopg2.Error as e:
+        app.logger.error(f"Error connecting to PostgreSQL database: {e}")
         return None
 
 # --- File Upload Configuration ---
@@ -78,12 +62,13 @@ def process_image_paths_for_response(image_paths_json):
     if not image_paths_json:
         return []
     try:
-        image_paths = json.loads(image_paths_json) if isinstance(image_paths_json, str) else image_paths_json
+        # Data is already a list from psycopg2, no need for json.loads
+        image_paths = image_paths_json if isinstance(image_paths_json, list) else json.loads(image_paths_json)
         return [make_image_url_absolute(path) for path in image_paths if path]
     except (json.JSONDecodeError, TypeError):
         app.logger.error(f"Could not parse images JSON: {image_paths_json}")
         return []
-
+        
 def format_colombian_pesos(amount):
     try:
         return f"${int(amount):,}".replace(",", ".")
@@ -111,7 +96,7 @@ def register_user():
             cursor.execute(sql, (data['name'], data['email'], hashed_password, 'user'))
         conn.commit()
         return jsonify({'message': 'User registered successfully'}), 201
-    except pymysql.IntegrityError:
+    except psycopg2.IntegrityError:
         return jsonify({'error': 'Email already exists'}), 409
     finally:
         if conn:
@@ -126,7 +111,7 @@ def login_user():
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             sql = "SELECT * FROM users WHERE email = %s AND role = 'admin'"
             cursor.execute(sql, (data['email'],))
             user = cursor.fetchone()
@@ -177,17 +162,17 @@ def handle_products():
             return jsonify(product_data), 201
         
         # GET Products
-        query = request.args.get('q')
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            query = request.args.get('q')
             if query:
                 search_term = f"%{query}%"
-                sql = "SELECT * FROM products WHERE name LIKE %s OR category LIKE %s ORDER BY created_at DESC"
+                sql = "SELECT * FROM products WHERE name ILIKE %s OR category ILIKE %s ORDER BY created_at DESC"
                 cursor.execute(sql, (search_term, search_term))
             else:
                 sql = "SELECT * FROM products ORDER BY created_at DESC"
                 cursor.execute(sql)
             
-            products = cursor.fetchall()
+            products = [dict(row) for row in cursor.fetchall()]
             for p in products:
                 p['images'] = process_image_paths_for_response(p['images'])
             return jsonify(products)
@@ -200,13 +185,14 @@ def handle_product(product_id):
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'GET':
                 cursor.execute("SELECT * FROM products WHERE id = %s", (product_id,))
                 product = cursor.fetchone()
                 if product:
-                    product['images'] = process_image_paths_for_response(product['images'])
-                    return jsonify(product)
+                    product_dict = dict(product)
+                    product_dict['images'] = process_image_paths_for_response(product_dict['images'])
+                    return jsonify(product_dict)
                 return jsonify({'error': 'Product not found'}), 404
             
             elif request.method == 'PUT':
@@ -250,7 +236,7 @@ def handle_admins():
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
                 data = request.get_json()
                 if not data or not data.get('name') or not data.get('email') or not data.get('password'):
@@ -265,13 +251,13 @@ def handle_admins():
             query = request.args.get('q')
             sql = "SELECT id, name, email FROM users WHERE role = 'admin'"
             if query:
-                sql += " AND (name LIKE %s OR email LIKE %s)"
+                sql += " AND (name ILIKE %s OR email ILIKE %s)"
                 cursor.execute(sql, (f"%{query}%", f"%{query}%"))
             else:
                 cursor.execute(sql)
-            admins = cursor.fetchall()
+            admins = [dict(row) for row in cursor.fetchall()]
             return jsonify(admins)
-    except pymysql.IntegrityError:
+    except psycopg2.IntegrityError:
         return jsonify({'error': 'Admin with that email already exists'}), 409
     finally:
         if conn:
@@ -282,13 +268,14 @@ def handle_admin(admin_id):
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'admin'")
             admin_count = cursor.fetchone()['count']
             if admin_count <= 1:
                 return jsonify({'error': 'Cannot delete the last administrator'}), 400
             
-            rows_affected = cursor.execute("DELETE FROM users WHERE id = %s AND role = 'admin'", (admin_id,))
+            cursor.execute("DELETE FROM users WHERE id = %s AND role = 'admin'", (admin_id,))
+            rows_affected = cursor.rowcount
             if rows_affected == 0:
                 return jsonify({'error': 'Administrator not found'}), 404
             conn.commit()
@@ -302,7 +289,7 @@ def handle_settings():
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
                 data = request.form
                 hero_images_json = data.get('heroImages', '[]')
@@ -318,32 +305,41 @@ def handle_settings():
                             slide['imageUrl'] = f"/uploads/{filename}"
                     processed_hero_images.append(slide)
 
-                sql = """INSERT INTO settings (id, heroImages, featuredCollectionTitle, featuredCollectionDescription, promoSectionTitle, promoSectionDescription, promoSectionVideoUrl, phone, contactEmail, twitterUrl, instagramUrl, facebookUrl)
+                sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url)
                          VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                         ON DUPLICATE KEY UPDATE
-                         heroImages=VALUES(heroImages), featuredCollectionTitle=VALUES(featuredCollectionTitle), featuredCollectionDescription=VALUES(featuredCollectionDescription),
-                         promoSectionTitle=VALUES(promoSectionTitle), promoSectionDescription=VALUES(promoSectionDescription), promoSectionVideoUrl=VALUES(promoSectionVideoUrl),
-                         phone=VALUES(phone), contactEmail=VALUES(contactEmail), twitterUrl=VALUES(twitterUrl), instagramUrl=VALUES(instagramUrl), facebookUrl=VALUES(facebookUrl)"""
+                         ON CONFLICT (id) DO UPDATE SET
+                         hero_images = EXCLUDED.hero_images,
+                         featured_collection_title = EXCLUDED.featured_collection_title,
+                         featured_collection_description = EXCLUDED.featured_collection_description,
+                         promo_section_title = EXCLUDED.promo_section_title,
+                         promo_section_description = EXCLUDED.promo_section_description,
+                         promo_section_video_url = EXCLUDED.promo_section_video_url,
+                         phone = EXCLUDED.phone,
+                         contact_email = EXCLUDED.contact_email,
+                         twitter_url = EXCLUDED.twitter_url,
+                         instagram_url = EXCLUDED.instagram_url,
+                         facebook_url = EXCLUDED.facebook_url
+                         RETURNING *"""
                 values = (
                     json.dumps(processed_hero_images), data.get('featuredCollectionTitle'), data.get('featuredCollectionDescription'),
                     data.get('promoSectionTitle'), data.get('promoSectionDescription'), data.get('promoSectionVideoUrl'),
                     data.get('phone'), data.get('contactEmail'), data.get('twitterUrl'), data.get('instagramUrl'), data.get('facebookUrl')
                 )
                 cursor.execute(sql, values)
+                settings = dict(cursor.fetchone())
                 conn.commit()
-                cursor.execute("SELECT * FROM settings WHERE id = 1")
-                settings = cursor.fetchone()
-                if settings and settings.get('heroImages'):
-                    settings['heroImages'] = process_image_paths_for_response(settings['heroImages'])
+                if settings and settings.get('hero_images'):
+                    settings['heroImages'] = process_image_paths_for_response(settings['hero_images'])
                 return jsonify(settings)
             
             # GET request
             cursor.execute("SELECT * FROM settings WHERE id = 1")
             settings = cursor.fetchone()
             if settings:
-                if settings.get('heroImages'):
-                    settings['heroImages'] = process_image_paths_for_response(settings['heroImages'])
-                return jsonify(settings)
+                settings_dict = dict(settings)
+                if settings_dict.get('hero_images'):
+                    settings_dict['heroImages'] = process_image_paths_for_response(settings_dict['hero_images'])
+                return jsonify(settings_dict)
             return jsonify({}), 404
     finally:
         if conn:
@@ -358,7 +354,7 @@ def create_notification():
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
         with conn.cursor() as cursor:
-            sql = "INSERT INTO notifications (message, imageUrl, linkUrl) VALUES (%s, %s, %s)"
+            sql = "INSERT INTO notifications (message, image_url, link_url) VALUES (%s, %s, %s)"
             cursor.execute(sql, (data['message'], data.get('imageUrl'), data.get('linkUrl')))
         conn.commit()
         return jsonify({'message': 'Notification created'}), 201
@@ -371,14 +367,15 @@ def get_latest_notification():
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             cursor.execute("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 1")
             notification = cursor.fetchone()
             if not notification:
                 return jsonify({'error': 'No notifications found'}), 404
-            if notification.get('imageUrl'):
-                notification['imageUrl'] = make_image_url_absolute(notification['imageUrl'])
-            return jsonify(notification)
+            notification_dict = dict(notification)
+            if notification_dict.get('image_url'):
+                notification_dict['imageUrl'] = make_image_url_absolute(notification_dict['image_url'])
+            return jsonify(notification_dict)
     finally:
         if conn:
             conn.close()
@@ -388,7 +385,7 @@ def handle_stores():
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
                 data = request.form
                 image_url = data.get('imageUrl', '')
@@ -398,21 +395,19 @@ def handle_stores():
                         filename = secure_filename(f"store_{uuid.uuid4()}_{file.filename}")
                         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                         image_url = f"/uploads/{filename}"
-                sql = """INSERT INTO store_locations (name, address, city, phone, hours, mapEmbedUrl, imageUrl)
-                         VALUES (%s, %s, %s, %s, %s, %s, %s)"""
+                sql = """INSERT INTO store_locations (name, address, city, phone, hours, map_embed_url, image_url)
+                         VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *"""
                 values = (data.get('name'), data.get('address'), data.get('city'), data.get('phone'), data.get('hours'), data.get('mapEmbedUrl'), image_url)
                 cursor.execute(sql, values)
+                new_store = dict(cursor.fetchone())
                 conn.commit()
-                last_id = cursor.lastrowid
-                cursor.execute("SELECT * FROM store_locations WHERE id = %s", (last_id,))
-                new_store = cursor.fetchone()
                 return jsonify(new_store), 201
 
             # GET all stores
             cursor.execute("SELECT * FROM store_locations")
-            stores = cursor.fetchall()
+            stores = [dict(row) for row in cursor.fetchall()]
             for s in stores:
-                s['imageUrl'] = make_image_url_absolute(s['imageUrl'])
+                s['imageUrl'] = make_image_url_absolute(s['image_url'])
             return jsonify(stores)
     finally:
         if conn:
@@ -423,11 +418,11 @@ def handle_store(store_id):
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'PUT':
                 data = request.form
-                cursor.execute("SELECT imageUrl FROM store_locations WHERE id = %s", (store_id,))
-                current_image = cursor.fetchone()['imageUrl']
+                cursor.execute("SELECT image_url FROM store_locations WHERE id = %s", (store_id,))
+                current_image = cursor.fetchone()['image_url']
                 image_url = data.get('imageUrl', current_image)
                 if 'imageFile' in request.files and request.files['imageFile'].filename != '':
                     file = request.files['imageFile']
@@ -435,13 +430,12 @@ def handle_store(store_id):
                         filename = secure_filename(f"store_{uuid.uuid4()}_{file.filename}")
                         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                         image_url = f"/uploads/{filename}"
-                sql = """UPDATE store_locations SET name=%s, address=%s, city=%s, phone=%s, hours=%s, mapEmbedUrl=%s, imageUrl=%s
-                         WHERE id=%s"""
+                sql = """UPDATE store_locations SET name=%s, address=%s, city=%s, phone=%s, hours=%s, map_embed_url=%s, image_url=%s
+                         WHERE id=%s RETURNING *"""
                 values = (data.get('name'), data.get('address'), data.get('city'), data.get('phone'), data.get('hours'), data.get('mapEmbedUrl'), image_url, store_id)
                 cursor.execute(sql, values)
+                updated_store = dict(cursor.fetchone())
                 conn.commit()
-                cursor.execute("SELECT * FROM store_locations WHERE id = %s", (store_id,))
-                updated_store = cursor.fetchone()
                 return jsonify(updated_store)
 
             elif request.method == 'DELETE':
@@ -451,7 +445,6 @@ def handle_store(store_id):
     finally:
         if conn:
             conn.close()
-
 
 @app.route('/api/generate-invoice-docx', methods=['POST'])
 def generate_invoice_docx():
@@ -467,7 +460,7 @@ def generate_invoice_docx():
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             for item_data in items:
                 product_id = item_data.get('productId')
                 quantity = int(item_data.get('quantity', 1))
@@ -497,7 +490,7 @@ def generate_invoice_docx():
                 })
         conn.commit()
 
-    except (ValueError, pymysql.MySQLError) as e:
+    except (ValueError, psycopg2.Error) as e:
         conn.rollback()
         app.logger.error(f"Error processing invoice transaction: {e}")
         return jsonify({'error': str(e)}), 500
@@ -568,3 +561,5 @@ def generate_invoice_docx():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
+
+    
