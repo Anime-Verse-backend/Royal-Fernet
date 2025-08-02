@@ -9,6 +9,6 @@ echo "Initializing the database..."
 python init_db.py
 
 echo "Iniciando backend..."
-python app.py
+python app.py 
 
 echo "Build finished."
