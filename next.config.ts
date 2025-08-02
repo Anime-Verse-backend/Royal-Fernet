@@ -62,6 +62,14 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'site-2206080.mozfiles.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'encrypted-tbn2.gstatic.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.pinimg.com'
       }
     ],
   },
@@ -71,6 +79,8 @@ const nextConfig: NextConfig = {
     },
   },
 };
+
+
 
 export default nextConfig;
 
