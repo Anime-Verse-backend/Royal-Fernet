@@ -55,6 +55,7 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: '*.onrender.com',
       },
+
       {
         protocol: 'https',
         hostname: 'th.bing.com',
@@ -65,12 +66,20 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'images.pexels.com',
+      },
+      {
+        protocol: 'https',
         hostname: 'encrypted-tbn2.gstatic.com',
       },
       {
         protocol: 'https',
         hostname: 'i.pinimg.com'
-      }
+      },
+      {protocol: 'https',
+       hostname: 'cdn.pixabay.com'
+      },
+      
     ],
   },
   experimental: {
@@ -79,8 +88,6 @@ const nextConfig: NextConfig = {
     },
   },
 };
-
-
 
 export default nextConfig;
 
