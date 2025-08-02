@@ -59,17 +59,23 @@ def make_image_url_absolute(path):
     api_base = os.getenv('API_BASE_URL', request.host_url)
     return f"{api_base.rstrip('/')}{path}"
 
-def process_image_paths_for_response(image_paths_json):
-    if not image_paths_json:
+def process_image_paths_for_response(image_data_json):
+    if not image_data_json:
         return []
     try:
-        # Data is already a list from psycopg2, no need for json.loads
-        image_paths = image_paths_json if isinstance(image_paths_json, list) else json.loads(image_paths_json)
-        return [make_image_url_absolute(path) for path in image_paths if path]
-    except (json.JSONDecodeError, TypeError):
-        app.logger.error(f"Could not parse images JSON: {image_paths_json}")
-        return []
+        # Data can be a list of dicts from psycopg2 or a JSON string from form
+        image_data = image_data_json if isinstance(image_data_json, list) else json.loads(image_data_json)
         
+        processed_data = []
+        for item in image_data:
+            if isinstance(item, dict) and 'imageUrl' in item:
+                item['imageUrl'] = make_image_url_absolute(item['imageUrl'])
+            processed_data.append(item)
+        return processed_data
+    except (json.JSONDecodeError, TypeError):
+        app.logger.error(f"Could not parse or process image JSON: {image_data_json}")
+        return []
+
 def format_colombian_pesos(amount):
     try:
         return f"${int(amount):,}".replace(",", ".")
@@ -175,7 +181,9 @@ def handle_products():
             
             products = [dict(row) for row in cursor.fetchall()]
             for p in products:
-                p['images'] = process_image_paths_for_response(p['images'])
+                # This is a simple list of paths, not dicts
+                if p.get('images'):
+                    p['images'] = [make_image_url_absolute(path) for path in p['images'] if path]
             return jsonify(products)
     finally:
         if conn:
@@ -192,7 +200,8 @@ def handle_product(product_id):
                 product = cursor.fetchone()
                 if product:
                     product_dict = dict(product)
-                    product_dict['images'] = process_image_paths_for_response(product_dict['images'])
+                    if product_dict.get('images'):
+                        product_dict['images'] = [make_image_url_absolute(path) for path in product_dict['images'] if path]
                     return jsonify(product_dict)
                 return jsonify({'error': 'Product not found'}), 404
             
@@ -293,18 +302,16 @@ def handle_settings():
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
                 data = request.form
-                # Start with existing hero images from form data URL fields
+                api_base_url = os.getenv('API_BASE_URL', request.host_url).rstrip('/')
+                
                 hero_images_json = data.get('heroImages', '[]')
                 hero_images_data = json.loads(hero_images_json)
                 processed_hero_images = []
 
-                # Use a consistent API base URL for stripping prefixes
-                api_base_url = os.getenv('API_BASE_URL', request.host_url).rstrip('/')
-
                 for index, slide in enumerate(hero_images_data):
                     file_key = f'heroImageFile_{index}'
                     url_key = f'heroImageUrl_{index}'
-                    
+
                     # 1. Check for a newly uploaded file
                     if file_key in request.files and request.files[file_key].filename != '':
                         file = request.files[file_key]
@@ -312,15 +319,16 @@ def handle_settings():
                             filename = secure_filename(f"setting_hero_{uuid.uuid4()}_{file.filename}")
                             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                             slide['imageUrl'] = f"/uploads/{filename}"
-                    # 2. Check for an existing URL (from hidden input)
+                    
+                    # 2. Check for an existing URL from hidden inputs or the original JSON
                     elif data.get(url_key):
                         existing_url = data.get(url_key)
-                        # Strip the base URL if present, to store a relative path
-                        if existing_url.startswith(api_base_url):
-                            slide['imageUrl'] = existing_url.replace(api_base_url, '', 1)
+                        # Strip the base URL to store a relative path, but only if it's there
+                        if existing_url and isinstance(existing_url, str) and existing_url.startswith(api_base_url):
+                             slide['imageUrl'] = existing_url.replace(api_base_url, '', 1)
                         else:
-                            slide['imageUrl'] = existing_url
-                    
+                             slide['imageUrl'] = existing_url
+
                     processed_hero_images.append(slide)
 
                 sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url)
@@ -347,7 +355,6 @@ def handle_settings():
                 settings = dict(cursor.fetchone())
                 conn.commit()
                 if settings and settings.get('hero_images'):
-                     # The field is named 'hero_images' in the DB, not 'heroImages'
                     settings['hero_images'] = process_image_paths_for_response(settings['hero_images'])
                 return jsonify(settings)
             
@@ -357,13 +364,7 @@ def handle_settings():
             if settings:
                 settings_dict = dict(settings)
                 if settings_dict.get('hero_images'):
-                    # The field is named 'hero_images' in the DB
-                    processed_slides = []
-                    for slide in settings_dict['hero_images']:
-                        if 'imageUrl' in slide:
-                            slide['imageUrl'] = make_image_url_absolute(slide['imageUrl'])
-                        processed_slides.append(slide)
-                    settings_dict['hero_images'] = processed_slides
+                    settings_dict['hero_images'] = process_image_paths_for_response(settings_dict['hero_images'])
 
                 return jsonify(settings_dict)
             return jsonify({}), 404
@@ -634,7 +635,10 @@ def get_table_content(table_name):
                 if isinstance(o, (float, int)):
                      return o
                 if isinstance(o, (list, dict)):
-                    return json.dumps(o)
+                    try:
+                        return json.dumps(o, ensure_ascii=False)
+                    except TypeError:
+                        return str(o)
                 return str(o)
             
             # Apply converter to each value in each row
@@ -658,3 +662,5 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
 
+
+    
