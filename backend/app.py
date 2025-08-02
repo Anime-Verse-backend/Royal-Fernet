@@ -280,19 +280,21 @@ def handle_settings():
                 for index, slide in enumerate(hero_images_data):
                     if not isinstance(slide, dict): continue
 
+                    # Create a copy to modify
+                    processed_slide = slide.copy()
+
                     # Check for new file upload first
                     file_key = f'heroImageFile_{index}'
                     if file_key in request.files and request.files[file_key].filename:
                         file = request.files[file_key]
                         data_uri = file_to_data_uri(file)
                         if data_uri:
-                            slide['imageUrl'] = data_uri
+                            processed_slide['imageUrl'] = data_uri
                     
-                    # If no file, use the URL from the hidden input (if it exists)
-                    elif f'heroImageUrl_{index}' in request.form:
-                         slide['imageUrl'] = request.form.get(f'heroImageUrl_{index}')
-
-                    processed_hero_images.append(slide)
+                    # If no file, use the URL from the hidden input (which is already in the slide object)
+                    # No extra step needed here, if no file is uploaded, the existing imageUrl is preserved.
+                    
+                    processed_hero_images.append(processed_slide)
 
                 sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url)
                          VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
