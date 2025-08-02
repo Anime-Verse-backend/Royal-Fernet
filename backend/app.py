@@ -7,6 +7,7 @@ import psycopg2.extras
 import io
 import qrcode
 import logging
+import base64
 from docx import Document
 from docx.shared import Inches
 from flask import send_file, send_from_directory, request, jsonify
@@ -41,11 +42,7 @@ def get_db_connection():
         app.logger.error(f"Error connecting to PostgreSQL database: {e}")
         return None
 
-# --- File Upload Configuration ---
-UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads'))
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# --- File Upload Configuration (No longer saves to disk) ---
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 def allowed_file(filename):
@@ -53,42 +50,22 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # --- Helper Functions ---
-def make_image_url_absolute(path):
-    if not path or path.startswith(('http://', 'https://')):
-        return path
-    api_base = os.getenv('API_BASE_URL', request.host_url)
-    return f"{api_base.rstrip('/')}{path}"
-
-def process_image_paths_for_response(image_data_json):
-    if not image_data_json:
-        return []
-    try:
-        # Data can be a list of dicts from psycopg2 or a JSON string from form
-        image_data = image_data_json if isinstance(image_data_json, list) else json.loads(image_data_json)
-        
-        processed_data = []
-        for item in image_data:
-            if isinstance(item, dict) and 'imageUrl' in item:
-                # Ensure imageUrl is treated as a string before operating on it
-                if 'imageUrl' in item and isinstance(item['imageUrl'], str):
-                    item['imageUrl'] = make_image_url_absolute(item['imageUrl'])
-            processed_data.append(item)
-        return processed_data
-    except (json.JSONDecodeError, TypeError):
-        app.logger.error(f"Could not parse or process image JSON: {image_data_json}")
-        return []
-
-def format_colombian_pesos(amount):
-    try:
-        return f"${int(amount):,}".replace(",", ".")
-    except (ValueError, TypeError):
-        return str(amount)
+def file_to_data_uri(file):
+    """Converts a file stream to a Data URI."""
+    if not file or not file.filename:
+        return None
+    
+    if allowed_file(file.filename):
+        try:
+            encoded_string = base64.b64encode(file.read()).decode('utf-8')
+            mime_type = file.mimetype
+            return f"data:{mime_type};base64,{encoded_string}"
+        except Exception as e:
+            app.logger.error(f"Could not convert file to Data URI: {e}")
+            return None
+    return None
 
 # --- API Routes ---
-
-@app.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/api/register', methods=['POST'])
 def register_user():
@@ -138,18 +115,20 @@ def handle_products():
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
         if request.method == 'POST':
-            image_paths = []
+            image_uris = []
             for i in range(1, 5):
                 file_key = f'image{i}'
                 url_key = f'imageUrl{i}'
-                if file_key in request.files and request.files[file_key].filename != '':
+
+                # Prioritize file upload
+                if file_key in request.files and request.files[file_key].filename:
                     file = request.files[file_key]
-                    if file and allowed_file(file.filename):
-                        filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
-                        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                        image_paths.append(f"/uploads/{filename}")
+                    data_uri = file_to_data_uri(file)
+                    if data_uri:
+                        image_uris.append(data_uri)
+                # Fallback to URL if provided
                 elif request.form.get(url_key):
-                    image_paths.append(request.form.get(url_key))
+                    image_uris.append(request.form.get(url_key))
             
             product_data = {
                 'id': str(uuid.uuid4()),
@@ -159,7 +138,7 @@ def handle_products():
                 'price': request.form.get('price'),
                 'discount': request.form.get('discount', 0),
                 'stock': request.form.get('stock', 100),
-                'images': json.dumps(image_paths),
+                'images': json.dumps(image_uris),
                 'is_featured': request.form.get('isFeatured') == 'on'
             }
             with conn.cursor() as cursor:
@@ -167,7 +146,6 @@ def handle_products():
                          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
                 cursor.execute(sql, tuple(product_data.values()))
             conn.commit()
-            product_data['images'] = process_image_paths_for_response(product_data['images'])
             return jsonify(product_data), 201
         
         # GET Products
@@ -182,10 +160,6 @@ def handle_products():
                 cursor.execute(sql)
             
             products = [dict(row) for row in cursor.fetchall()]
-            for p in products:
-                # This is a simple list of paths, not dicts
-                if p.get('images'):
-                    p['images'] = [make_image_url_absolute(path) for path in p['images'] if path]
             return jsonify(products)
     finally:
         if conn:
@@ -201,35 +175,31 @@ def handle_product(product_id):
                 cursor.execute("SELECT * FROM products WHERE id = %s", (product_id,))
                 product = cursor.fetchone()
                 if product:
-                    product_dict = dict(product)
-                    if product_dict.get('images'):
-                        product_dict['images'] = [make_image_url_absolute(path) for path in product_dict['images'] if path]
-                    return jsonify(product_dict)
+                    return jsonify(dict(product))
                 return jsonify({'error': 'Product not found'}), 404
             
             elif request.method == 'PUT':
-                api_base_url = os.getenv('API_BASE_URL', request.host_url).rstrip('/')
-                new_image_paths = []
+                new_image_uris = []
                 for i in range(1, 5):
-                    if f'image{i}' in request.files and request.files[f'image{i}'].filename != '':
-                        file = request.files[f'image{i}']
-                        if file and allowed_file(file.filename):
-                            filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
-                            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                            new_image_paths.append(f"/uploads/{filename}")
-                    elif request.form.get(f'imageUrl{i}'):
-                        existing_url = request.form.get(f'imageUrl{i}')
-                        if existing_url.startswith(api_base_url):
-                            new_image_paths.append(existing_url.replace(api_base_url, '', 1))
-                        else:
-                            new_image_paths.append(existing_url)
+                    file_key = f'image{i}'
+                    url_key = f'imageUrl{i}'
+
+                    # Prioritize new file upload
+                    if file_key in request.files and request.files[file_key].filename:
+                        file = request.files[file_key]
+                        data_uri = file_to_data_uri(file)
+                        if data_uri:
+                            new_image_uris.append(data_uri)
+                    # Fallback to existing URL
+                    elif request.form.get(url_key):
+                        new_image_uris.append(request.form.get(url_key))
                 
                 sql = """UPDATE products SET name=%s, description=%s, category=%s, price=%s, discount=%s, stock=%s, images=%s, is_featured=%s
                          WHERE id=%s"""
                 values = (
                     request.form.get('name'), request.form.get('description'), request.form.get('category'),
                     request.form.get('price'), request.form.get('discount', 0), request.form.get('stock', 100),
-                    json.dumps(new_image_paths), request.form.get('isFeatured') == 'on', product_id
+                    json.dumps(new_image_uris), request.form.get('isFeatured') == 'on', product_id
                 )
                 cursor.execute(sql, values)
                 conn.commit()
@@ -303,32 +273,24 @@ def handle_settings():
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
-                data = request.form
-                api_base_url = os.getenv('API_BASE_URL', request.host_url).rstrip('/')
-                
-                hero_images_json = data.get('heroImages', '[]')
+                hero_images_json = request.form.get('heroImages', '[]')
                 hero_images_data = json.loads(hero_images_json)
                 processed_hero_images = []
 
                 for index, slide in enumerate(hero_images_data):
-                    file_key = f'heroImageFile_{index}'
-                    
                     if not isinstance(slide, dict): continue
 
-                    # 1. Check for a newly uploaded file
-                    if file_key in request.files and request.files[file_key].filename != '':
+                    # Check for new file upload first
+                    file_key = f'heroImageFile_{index}'
+                    if file_key in request.files and request.files[file_key].filename:
                         file = request.files[file_key]
-                        if file and allowed_file(file.filename):
-                            filename = secure_filename(f"setting_hero_{uuid.uuid4()}_{file.filename}")
-                            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                            slide['imageUrl'] = f"/uploads/{filename}"
+                        data_uri = file_to_data_uri(file)
+                        if data_uri:
+                            slide['imageUrl'] = data_uri
                     
-                    # 2. Check for an existing URL from hidden inputs or the original JSON
-                    elif 'imageUrl' in slide:
-                        existing_url = slide.get('imageUrl')
-                        # Strip the base URL to store a relative path, but only if it's there
-                        if existing_url and isinstance(existing_url, str) and existing_url.startswith(api_base_url):
-                             slide['imageUrl'] = existing_url.replace(api_base_url, '', 1)
+                    # If no file, use the URL from the hidden input (if it exists)
+                    elif f'heroImageUrl_{index}' in request.form:
+                         slide['imageUrl'] = request.form.get(f'heroImageUrl_{index}')
 
                     processed_hero_images.append(slide)
 
@@ -348,26 +310,20 @@ def handle_settings():
                          facebook_url = EXCLUDED.facebook_url
                          RETURNING *"""
                 values = (
-                    json.dumps(processed_hero_images), data.get('featuredCollectionTitle'), data.get('featuredCollectionDescription'),
-                    data.get('promoSectionTitle'), data.get('promoSectionDescription'), data.get('promoSectionVideoUrl'),
-                    data.get('phone'), data.get('contactEmail'), data.get('twitterUrl'), data.get('instagramUrl'), data.get('facebookUrl')
+                    json.dumps(processed_hero_images), request.form.get('featuredCollectionTitle'), request.form.get('featuredCollectionDescription'),
+                    request.form.get('promoSectionTitle'), request.form.get('promoSectionDescription'), request.form.get('promoSectionVideoUrl'),
+                    request.form.get('phone'), request.form.get('contactEmail'), request.form.get('twitterUrl'), request.form.get('instagramUrl'), request.form.get('facebookUrl')
                 )
                 cursor.execute(sql, values)
                 settings = dict(cursor.fetchone())
                 conn.commit()
-                if settings and settings.get('hero_images'):
-                    settings['hero_images'] = process_image_paths_for_response(settings['hero_images'])
                 return jsonify(settings)
             
             # GET request
             cursor.execute("SELECT * FROM settings WHERE id = 1")
             settings = cursor.fetchone()
             if settings:
-                settings_dict = dict(settings)
-                if settings_dict.get('hero_images'):
-                    settings_dict['hero_images'] = process_image_paths_for_response(settings_dict['hero_images'])
-
-                return jsonify(settings_dict)
+                return jsonify(dict(settings))
             return jsonify({}), 404
     except Exception as e:
         app.logger.error(f"Error in handle_settings: {e}", exc_info=True)
@@ -379,8 +335,8 @@ def handle_settings():
 @app.route('/api/notifications', methods=['POST'])
 def create_notification():
     data = request.get_json()
-    if not data or 'message' not in data:
-        return jsonify({'error': 'Message is required'}), 400
+    if not data or 'message' not in data or 'title' not in data:
+        return jsonify({'error': 'Title and message are required'}), 400
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
@@ -389,6 +345,9 @@ def create_notification():
             cursor.execute(sql, (data.get('title'), data['message'], data.get('image_url'), data.get('link_url')))
         conn.commit()
         return jsonify({'message': 'Notification created'}), 201
+    except Exception as e:
+        app.logger.error(f"Error creating notification: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
     finally:
         if conn:
             conn.close()
@@ -403,10 +362,7 @@ def get_latest_notification():
             notification = cursor.fetchone()
             if not notification:
                 return jsonify({'error': 'No notifications found'}), 404
-            notification_dict = dict(notification)
-            if notification_dict.get('image_url'):
-                notification_dict['image_url'] = make_image_url_absolute(notification_dict['image_url'])
-            return jsonify(notification_dict)
+            return jsonify(dict(notification))
     finally:
         if conn:
             conn.close()
@@ -419,13 +375,13 @@ def handle_stores():
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
                 data = request.form
-                image_url = data.get('imageUrl', '');
-                if 'imageFile' in request.files and request.files['imageFile'].filename != '':
+                image_url = '' # Start with empty image
+                if 'imageFile' in request.files and request.files['imageFile'].filename:
                     file = request.files['imageFile']
-                    if file and allowed_file(file.filename):
-                        filename = secure_filename(f"store_{uuid.uuid4()}_{file.filename}")
-                        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                        image_url = f"/uploads/{filename}"
+                    data_uri = file_to_data_uri(file)
+                    if data_uri:
+                        image_url = data_uri
+                
                 sql = """INSERT INTO store_locations (name, address, city, phone, hours, map_embed_url, image_url)
                          VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *"""
                 values = (data.get('name'), data.get('address'), data.get('city'), data.get('phone'), data.get('hours'), data.get('mapEmbedUrl'), image_url)
@@ -437,8 +393,6 @@ def handle_stores():
             # GET all stores
             cursor.execute("SELECT * FROM store_locations ORDER BY id")
             stores = [dict(row) for row in cursor.fetchall()]
-            for s in stores:
-                s['image_url'] = make_image_url_absolute(s.get('image_url'))
             return jsonify(stores)
     finally:
         if conn:
@@ -453,14 +407,15 @@ def handle_store(store_id):
             if request.method == 'PUT':
                 data = request.form
                 cursor.execute("SELECT image_url FROM store_locations WHERE id = %s", (store_id,))
-                current_image = cursor.fetchone()['image_url']
-                image_url = data.get('imageUrl', current_image)
-                if 'imageFile' in request.files and request.files['imageFile'].filename != '':
+                current_image_res = cursor.fetchone()
+                image_url = current_image_res['image_url'] if current_image_res else ''
+
+                if 'imageFile' in request.files and request.files['imageFile'].filename:
                     file = request.files['imageFile']
-                    if file and allowed_file(file.filename):
-                        filename = secure_filename(f"store_{uuid.uuid4()}_{file.filename}")
-                        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                        image_url = f"/uploads/{filename}"
+                    data_uri = file_to_data_uri(file)
+                    if data_uri:
+                        image_url = data_uri
+                
                 sql = """UPDATE store_locations SET name=%s, address=%s, city=%s, phone=%s, hours=%s, map_embed_url=%s, image_url=%s
                          WHERE id=%s RETURNING *"""
                 values = (data.get('name'), data.get('address'), data.get('city'), data.get('phone'), data.get('hours'), data.get('mapEmbedUrl'), image_url, store_id)
@@ -562,14 +517,14 @@ def generate_invoice_docx():
             row_cells = table.add_row().cells
             row_cells[0].text = item['name']
             row_cells[1].text = str(item['quantity'])
-            row_cells[2].text = format_colombian_pesos(item['unit_price'])
-            row_cells[3].text = format_colombian_pesos(item['subtotal'])
+            row_cells[2].text = f"${int(item['unit_price']):,}".replace(",", ".")
+            row_cells[3].text = f"${int(item['subtotal']):,}".replace(",", ".")
 
         p_total = document.add_paragraph()
         p_total.alignment = 2 
         run_total_label = p_total.add_run('TOTAL A PAGAR: ')
         run_total_label.bold = True
-        run_total_value = p_total.add_run(format_colombian_pesos(grand_total))
+        run_total_value = p_total.add_run(f"${int(grand_total):,}".replace(",", "."))
         run_total_value.bold = True
 
         document.add_heading('Detalles de la Tienda', level=1)
@@ -612,37 +567,24 @@ def get_db_tables():
 
 @app.route('/api/db/tables/<string:table_name>', methods=['GET'])
 def get_table_content(table_name):
-    # Basic sanitation to prevent obvious SQL injection.
-    # In a real-world app, use a more robust validation method.
-    if not table_name.isalnum() and '_' not in table_name:
+    if not table_name.replace('_', '').isalnum():
         return jsonify({'error': 'Invalid table name'}), 400
 
     conn = get_db_connection()
     if not conn: return jsonify({'error': 'Database connection failed'}), 500
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            # The table name is sanitized, but it's generally safer to use psycopg2's sql module for identifiers
             from psycopg2 import sql
             query = sql.SQL("SELECT * FROM {}").format(sql.Identifier(table_name))
             cursor.execute(query)
             
-            # Fetch all rows and convert them to a list of dicts
             rows = [dict(row) for row in cursor.fetchall()]
             
-            # Convert non-serializable types like datetime or decimal
             def json_converter(o):
                 if isinstance(o, datetime):
                     return o.isoformat()
-                if isinstance(o, (float, int)):
-                     return o
-                if isinstance(o, (list, dict)):
-                    try:
-                        return json.dumps(o, ensure_ascii=False)
-                    except TypeError:
-                        return str(o)
                 return str(o)
             
-            # Apply converter to each value in each row
             for row in rows:
                 for key, value in row.items():
                     row[key] = json_converter(value)
@@ -657,17 +599,7 @@ def get_table_content(table_name):
 
 
 if __name__ == '__main__':
-    # This block is for local development.
-    # When deployed on Render with Gunicorn, Gunicorn will bind to the host and port.
-    # Render provides the PORT environment variable.
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-
-
-    
-
-
-
-    
 
     

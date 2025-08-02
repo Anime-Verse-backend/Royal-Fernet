@@ -15,11 +15,10 @@ import { fetchProductById } from '@/lib/data';
 import type { Product } from '@/lib/definitions';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
-import { Skeleton } from '@/components/ui/skeleton';
 import { AddToCartButton } from '@/components/add-to-cart-button';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getSafeImageUrl } from '@/lib/utils';
 import { Facebook, Twitter } from 'lucide-react';
+import ProductDetailLoading from './loading';
 
 const PinterestIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -41,7 +40,9 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
         notFound();
       }
       setProduct(fetchedProduct);
-      setSelectedImage(fetchedProduct?.images?.[0] || 'https://placehold.co/800x800.png');
+      if (fetchedProduct?.images && fetchedProduct.images.length > 0) {
+        setSelectedImage(getSafeImageUrl(fetchedProduct.images[0], '800x800'));
+      }
       setLoading(false);
     };
     getProduct();
@@ -57,15 +58,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     ? originalPrice - (originalPrice * product.discount) / 100
     : originalPrice;
 
-  const safeImageUrls = product.images
-    .map(img => {
-      if (!img || typeof img !== 'string' || !img.trim()) return null;
-      if (img.startsWith('/') || img.startsWith('data:')) return img;
-      try { new URL(img); return img; } catch (e) { return null; }
-    })
-    .filter((img): img is string => img !== null);
-
-  const imagesToShow = safeImageUrls.length > 0 ? safeImageUrls : ['https://placehold.co/800x800.png'];
+  const imagesToShow = product.images.map(img => getSafeImageUrl(img, '100x100'));
     
   const shareLinks = {
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`,
@@ -158,30 +151,4 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
         </div>
     </div>
   );
-}
-
-function ProductDetailLoading() {
-    return (
-        <div className="container mx-auto max-w-6xl py-8 px-4 sm:py-16 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-2 gap-8 lg:gap-16">
-                <div className="w-full flex flex-col items-center">
-                    <Skeleton className="aspect-square w-full max-w-md rounded-lg" />
-                    <div className="grid grid-cols-5 gap-2 max-w-md w-full mt-4">
-                        <Skeleton className="aspect-square w-full rounded-md" />
-                        <Skeleton className="aspect-square w-full rounded-md" />
-                        <Skeleton className="aspect-square w-full rounded-md" />
-                        <Skeleton className="aspect-square w-full rounded-md" />
-                        <Skeleton className="aspect-square w-full rounded-md" />
-                    </div>
-                </div>
-                <div className="flex flex-col justify-center space-y-4">
-                    <Skeleton className="h-10 w-3/4" />
-                    <Skeleton className="h-6 w-1/4" />
-                    <Skeleton className="h-12 w-1/2" />
-                    <Skeleton className="h-24 w-full" />
-                    <Skeleton className="h-12 w-full md:w-40" />
-                </div>
-            </div>
-        </div>
-    );
 }

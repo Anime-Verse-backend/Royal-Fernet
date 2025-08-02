@@ -1,7 +1,8 @@
 /**
  * @fileoverview Funciones de utilidad.
  * Contiene la función `cn`, que combina y fusiona clases de Tailwind CSS
- * de forma segura, y `formatCurrency` para mostrar precios en el formato correcto.
+ * de forma segura, `formatCurrency` para precios, y `getSafeImageUrl` para
+ * validar y mostrar imágenes de forma robusta.
  */
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
