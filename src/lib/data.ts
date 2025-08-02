@@ -30,7 +30,7 @@ export async function fetchProducts(query?: string): Promise<Product[]> {
   try {
     const res = await fetch(url, { cache: 'no-store' }); 
     if (!res.ok) {
-      console.error(`Error al obtener productos: ${res.status} ${res.statusText}`);
+      console.error(`Error al obtener productos: ${res.status} ${await res.text()}`);
       return [];
     }
     let products: Product[] = await res.json();
@@ -48,7 +48,7 @@ export async function fetchProductById(id: string): Promise<Product | undefined>
     const res = await fetch(`${baseUrl}/api/products/${id}`, { cache: 'no-store' });
     if (!res.ok) {
       if (res.status === 404) return undefined;
-      console.error(`Error al obtener el producto ${id}: ${res.status} ${res.statusText}`);
+      console.error(`Error al obtener el producto ${id}: ${res.status} ${await res.text()}`);
       return undefined;
     }
     return await res.json();
@@ -64,7 +64,7 @@ export async function fetchStoreSettings(): Promise<StoreSettings | null> {
     const res = await fetch(`${baseUrl}/api/settings`, { cache: 'no-store' });
     if (!res.ok) {
       if (res.status === 404) return null;
-      console.error(`Error al obtener la configuración de la tienda: ${res.status} ${res.statusText}`);
+      console.error(`Error al obtener la configuración de la tienda: ${res.status} ${await res.text()}`);
       return null;
     }
     return await res.json();
@@ -79,7 +79,7 @@ export async function fetchStores(): Promise<StoreLocation[]> {
   try {
     const res = await fetch(`${baseUrl}/api/stores`, { cache: 'no-store' });
     if (!res.ok) {
-      console.error(`Error al obtener tiendas: ${res.status} ${res.statusText}`);
+      console.error(`Error al obtener tiendas: ${res.status} ${await res.text()}`);
       return [];
     }
     return await res.json();
@@ -100,7 +100,7 @@ export async function fetchAdmins(query?: string): Promise<Admin[]> {
   try {
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) {
-       console.error(`Error al obtener administradores: ${res.status} ${res.statusText}`);
+       console.error(`Error al obtener administradores: ${res.status} ${await res.text()}`);
       return [];
     }
     return await res.json();
@@ -116,7 +116,7 @@ export async function fetchLatestNotification(): Promise<Notification | null> {
         const res = await fetch(`${baseUrl}/api/notifications/latest`, { cache: 'no-store' });
         if (!res.ok) {
             if (res.status === 404) return null;
-            console.error(`Error al obtener la última notificación: ${res.status} ${res.statusText}`);
+            console.error(`Error al obtener la última notificación: ${res.status} ${await res.text()}`);
             return null;
         }
         return await res.json();
@@ -132,7 +132,7 @@ export async function fetchDbTables(): Promise<string[]> {
   try {
     const res = await fetch(`${baseUrl}/api/db/tables`, { cache: 'no-store' });
     if (!res.ok) {
-      console.error(`Error fetching DB tables: ${res.status} ${res.statusText}`);
+      console.error(`Error fetching DB tables: ${res.status} ${await res.text()}`);
       return [];
     }
     return res.json();
@@ -147,7 +147,7 @@ export async function fetchTableContent(tableName: string): Promise<any[]> {
   try {
     const res = await fetch(`${baseUrl}/api/db/tables/${tableName}`, { cache: 'no-store' });
     if (!res.ok) {
-      console.error(`Error fetching content for table ${tableName}: ${res.status} ${res.statusText}`);
+      console.error(`Error fetching content for table ${tableName}: ${res.status} ${await res.text()}`);
       return [];
     }
     return res.json();

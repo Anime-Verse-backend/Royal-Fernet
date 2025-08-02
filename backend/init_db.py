@@ -54,7 +54,7 @@ def initialize_database():
                         price DECIMAL(10, 2) NOT NULL,
                         discount INT DEFAULT 0,
                         stock INT NOT NULL DEFAULT 100,
-                        images JSONB NOT NULL,
+                        images JSONB,
                         is_featured BOOLEAN DEFAULT FALSE,
                         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                     )
@@ -92,8 +92,8 @@ def initialize_database():
                         city VARCHAR(100) NOT NULL,
                         phone VARCHAR(50) NOT NULL,
                         hours VARCHAR(255) NOT NULL,
-                        map_embed_url TEXT NOT NULL,
-                        image_url VARCHAR(2048) NOT NULL
+                        map_embed_url TEXT,
+                        image_url VARCHAR(2048)
                     )
                 """
             }
@@ -170,5 +170,3 @@ def seed_data():
 if __name__ == '__main__':
     initialize_database()
     seed_data()
-
-    

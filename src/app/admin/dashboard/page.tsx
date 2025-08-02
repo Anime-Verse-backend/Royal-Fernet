@@ -179,7 +179,7 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
-    const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>(settings?.heroImages || []);
+    const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>(settings?.hero_images || []);
 
     const handleAddSlide = () => {
         setHeroSlides([...heroSlides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
@@ -187,12 +187,6 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
 
     const handleRemoveSlide = (index: number) => {
         setHeroSlides(heroSlides.filter((_, i) => i !== index));
-    };
-
-    const handleSlideChange = (index: number, field: keyof HeroSlide, value: string) => {
-        const newSlides = [...heroSlides];
-        newSlides[index] = { ...newSlides[index], [field]: value };
-        setHeroSlides(newSlides);
     };
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -292,12 +286,12 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                 <CardContent className="space-y-4">
                     <div className="grid gap-2">
                         <Label htmlFor="featuredCollectionTitle">Título de la Sección</Label>
-                        <Input id="featuredCollectionTitle" name="featuredCollectionTitle" defaultValue={settings?.featuredCollectionTitle} placeholder="COLECCIÓN ROYAL SERIES" required />
+                        <Input id="featuredCollectionTitle" name="featuredCollectionTitle" defaultValue={settings?.featured_collection_title} placeholder="COLECCIÓN ROYAL SERIES" required />
                          <p className="text-sm text-muted-foreground">El título sobre la cuadrícula de productos destacados.</p>
                     </div>
                      <div className="grid gap-2">
                         <Label htmlFor="featuredCollectionDescription">Descripción de la Colección</Label>
-                        <Textarea id="featuredCollectionDescription" name="featuredCollectionDescription" defaultValue={settings?.featuredCollectionDescription} placeholder="La Royal Series ofrece una gama de relojes..." />
+                        <Textarea id="featuredCollectionDescription" name="featuredCollectionDescription" defaultValue={settings?.featured_collection_description} placeholder="La Royal Series ofrece una gama de relojes..." />
                          <p className="text-sm text-muted-foreground">Un texto descriptivo para la colección destacada.</p>
                     </div>
                 </CardContent>
@@ -311,15 +305,15 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                 <CardContent className="space-y-4">
                      <div className="grid gap-2">
                         <Label htmlFor="promoSectionTitle">Título de la Sección Promo</Label>
-                        <Input id="promoSectionTitle" name="promoSectionTitle" defaultValue={settings?.promoSectionTitle} placeholder="ROYAL DELUXE" />
+                        <Input id="promoSectionTitle" name="promoSectionTitle" defaultValue={settings?.promo_section_title} placeholder="ROYAL DELUXE" />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="promoSectionDescription">Descripción de la Sección Promo</Label>
-                        <Textarea id="promoSectionDescription" name="promoSectionDescription" defaultValue={settings?.promoSectionDescription} placeholder="Descubre la elegancia y la innovación..." />
+                        <Textarea id="promoSectionDescription" name="promoSectionDescription" defaultValue={settings?.promo_section_description} placeholder="Descubre la elegancia y la innovación..." />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="promoSectionVideoUrl">URL del Video de YouTube (Embed)</Label>
-                        <Input id="promoSectionVideoUrl" name="promoSectionVideoUrl" defaultValue={settings?.promoSectionVideoUrl} placeholder="https://www.youtube.com/embed/VIDEO_ID" />
+                        <Input id="promoSectionVideoUrl" name="promoSectionVideoUrl" defaultValue={settings?.promo_section_video_url} placeholder="https://www.youtube.com/embed/VIDEO_ID" />
                         <p className="text-sm text-muted-foreground">Importante: Usa la URL para "Embed" (Insertar), no la URL normal del video.</p>
                     </div>
                 </CardContent>
@@ -337,19 +331,19 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                     </div>
                      <div className="grid gap-2">
                         <Label htmlFor="contactEmail">Email de Contacto</Label>
-                        <Input id="contactEmail" name="contactEmail" type="email" defaultValue={settings?.contactEmail} />
+                        <Input id="contactEmail" name="contactEmail" type="email" defaultValue={settings?.contact_email} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="twitterUrl">URL de Twitter (X)</Label>
-                        <Input id="twitterUrl" name="twitterUrl" defaultValue={settings?.twitterUrl} />
+                        <Input id="twitterUrl" name="twitterUrl" defaultValue={settings?.twitter_url} />
                     </div>
                      <div className="grid gap-2">
                         <Label htmlFor="instagramUrl">URL de Instagram</Label>
-                        <Input id="instagramUrl" name="instagramUrl" defaultValue={settings?.instagramUrl} />
+                        <Input id="instagramUrl" name="instagramUrl" defaultValue={settings?.instagram_url} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="facebookUrl">URL de Facebook</Label>
-                        <Input id="facebookUrl" name="facebookUrl" defaultValue={settings?.facebookUrl} />
+                        <Input id="facebookUrl" name="facebookUrl" defaultValue={settings?.facebook_url} />
                     </div>
                 </CardContent>
             </Card>

@@ -1,3 +1,4 @@
+
 import { fetchStores } from '@/lib/data';
 import type { Metadata } from 'next';
 import Image from 'next/image';
@@ -25,7 +26,7 @@ export default async function StoresPage() {
                         <div key={store.id} className={`grid md:grid-cols-2 gap-8 lg:gap-16 items-center ${index % 2 !== 0 ? 'md:grid-flow-row-dense' : ''}`}>
                             <div className={`aspect-video w-full rounded-lg overflow-hidden shadow-xl ${index % 2 !== 0 ? 'md:col-start-2' : ''}`}>
                                  <iframe
-                                    src={store.mapEmbedUrl}
+                                    src={store.map_embed_url}
                                     width="100%"
                                     height="100%"
                                     style={{ border: 0 }}

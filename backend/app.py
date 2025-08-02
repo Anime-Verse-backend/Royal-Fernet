@@ -3,6 +3,7 @@ import os
 import uuid
 import json
 import psycopg2
+import psycopg2.extras
 import io
 import qrcode
 import logging
@@ -407,7 +408,7 @@ def handle_stores():
             cursor.execute("SELECT * FROM store_locations")
             stores = [dict(row) for row in cursor.fetchall()]
             for s in stores:
-                s['imageUrl'] = make_image_url_absolute(s['image_url'])
+                s['imageUrl'] = make_image_url_absolute(s.get('image_url'))
             return jsonify(stores)
     finally:
         if conn:
@@ -604,6 +605,8 @@ def get_table_content(table_name):
                     return o.isoformat()
                 if isinstance(o, (float, int)):
                      return o
+                if isinstance(o, (list, dict)):
+                    return json.dumps(o)
                 return str(o)
             
             # Apply converter to each value in each row
@@ -622,5 +625,3 @@ def get_table_content(table_name):
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
-
-    

@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Componente modal para mostrar notificaciones al iniciar la app.
  * Obtiene la última notificación de la API y la muestra al usuario al cargar la página.
@@ -48,12 +49,12 @@ export function NotificationModal() {
     return null;
   }
   
-  const safeImageUrl = getSafeImageUrl(notification.imageUrl, '512x288');
+  const safeImageUrl = getSafeImageUrl(notification.image_url, '512x288');
 
   return (
     <Dialog open={isOpen} onOpenChange={handleDismiss}>
        <DialogContent className="sm:max-w-md p-0 overflow-hidden">
-        {notification.imageUrl && (
+        {notification.image_url && (
           <div className="relative aspect-video w-full">
             <Image
               src={safeImageUrl}
@@ -75,9 +76,9 @@ export function NotificationModal() {
             <Button type="button" variant="secondary" onClick={handleDismiss} className="w-full sm:w-auto">
                 Cerrar
             </Button>
-            {notification.linkUrl && (
+            {notification.link_url && (
                 <Button asChild className="w-full sm:w-auto">
-                  <a href={notification.linkUrl} target="_blank" rel="noopener noreferrer">Ver más</a>
+                  <a href={notification.link_url} target="_blank" rel="noopener noreferrer">Ver más</a>
                 </Button>
             )}
         </DialogFooter>

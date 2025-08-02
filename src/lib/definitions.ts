@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Definiciones de tipos de TypeScript para la aplicación.
  * Centraliza las interfaces y tipos de datos comunes, como `Product`, `CartItem` y `Admin`,
@@ -29,8 +30,8 @@ export type Admin = {
 export type Notification = {
   id: number;
   message: string;
-  imageUrl?: string;
-  linkUrl?: string;
+  image_url?: string;
+  link_url?: string;
   created_at: string;
 };
 
@@ -43,17 +44,17 @@ export type HeroSlide = {
 };
 
 export type StoreSettings = {
-  heroImages: HeroSlide[];
-  featuredCollectionTitle: string;
-  featuredCollectionDescription?: string;
-  promoSectionTitle?: string;
-  promoSectionDescription?: string;
-  promoSectionVideoUrl?: string;
+  hero_images: HeroSlide[];
+  featured_collection_title: string;
+  featured_collection_description?: string;
+  promo_section_title?: string;
+  promo_section_description?: string;
+  promo_section_video_url?: string;
   phone?: string;
-  contactEmail?: string;
-  twitterUrl?: string;
-  instagramUrl?: string;
-  facebookUrl?: string;
+  contact_email?: string;
+  twitter_url?: string;
+  instagram_url?: string;
+  facebook_url?: string;
 };
 
 export interface StoreLocation {
@@ -63,6 +64,6 @@ export interface StoreLocation {
   city: string;
   phone: string;
   hours: string;
-  mapEmbedUrl: string;
-  imageUrl: string;
+  map_embed_url: string;
+  image_url: string;
 }
