@@ -155,13 +155,12 @@ export async function updateStoreSettings(formData: FormData): Promise<{success:
         let errorText = await res.text();
         try {
             const errorJson = JSON.parse(errorText);
-            errorText = errorJson.error || errorText;
+            errorText = `500 Internal Server Error: ${errorJson.error || "Unknown error"}`;
         } catch (e) {
-            // Not a JSON error, use the raw text
+            errorText = `500 Internal Server Error: ${errorText}`;
         }
-        const errorMessage = `${res.status} ${res.statusText}: ${errorText}`;
-        console.error("Falló al actualizar la configuración de la tienda", errorMessage);
-        return { success: false, error: `No se pudo actualizar la configuración: ${errorMessage}` };
+        console.error("Falló al actualizar la configuración de la tienda", errorText);
+        return { success: false, error: `No se pudo actualizar la configuración: ${errorText}` };
       }
 
       revalidatePath('/admin/dashboard');

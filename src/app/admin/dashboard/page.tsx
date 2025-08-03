@@ -74,7 +74,6 @@ import {
 import { formatCurrency, getSafeImageUrl } from '@/lib/utils';
 import { Switch } from "@/components/ui/switch";
 import { Separator } from '@/components/ui/separator';
-import imageCompression from 'browser-image-compression';
 
 // Main page component
 export default function AdminDashboardPage() {
@@ -276,59 +275,23 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
 
 function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | null; onUpdate: () => void; }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>([]);
     const { toast } = useToast();
+    const formRef = useRef<HTMLFormElement>(null);
+
+    // Initialize state with data from props
+    const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>(settings?.hero_images || []);
 
     useEffect(() => {
         setHeroSlides(settings?.hero_images || []);
     }, [settings]);
-    
-    const handleFileChange = async (index: number, file: File | null) => {
-        if (!file) return;
-
-        const options = {
-            maxSizeMB: 1,
-            maxWidthOrHeight: 1920,
-            useWebWorker: true,
-        };
-
-        try {
-            const compressedFile = await imageCompression(file, options);
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const newSlides = [...heroSlides];
-                newSlides[index] = { ...newSlides[index], imageUrl: e.target?.result as string };
-                setHeroSlides(newSlides);
-            };
-            reader.readAsDataURL(compressedFile);
-        } catch (error) {
-            console.error(error);
-            toast({ title: "Error de Compresión", description: "No se pudo procesar la imagen.", variant: "destructive" });
-        }
-    };
 
     const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setIsSubmitting(true);
 
-        const form = event.currentTarget;
-        const formData = new FormData();
-        
-        // Append all text fields
-        const formElements = form.elements as HTMLFormControlsCollection;
-        for (let i = 0; i < formElements.length; i++) {
-            const element = formElements[i] as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-            if (element.name && element.type !== 'file') {
-                if (element.type === 'checkbox') {
-                    formData.append(element.name, (element as HTMLInputElement).checked ? 'on' : 'off');
-                } else {
-                    formData.append(element.name, element.value);
-                }
-            }
-        }
-        
-        // Append hero images as a JSON string
-        formData.append('heroImages', JSON.stringify(heroSlides));
+        const formData = new FormData(formRef.current!);
+        // Append hero slides data as a JSON string to be reconstructed in the backend
+        formData.append('heroImagesData', JSON.stringify(heroSlides));
 
         const result = await updateStoreSettings(formData);
 
@@ -341,7 +304,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
 
         setIsSubmitting(false);
     };
-    
+
     const handleAddSlide = () => {
         setHeroSlides([...heroSlides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
     };
@@ -350,8 +313,14 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
         setHeroSlides(heroSlides.filter((_, i) => i !== index));
     };
 
+    const handleSlideTextChange = (index: number, field: keyof HeroSlide, value: string) => {
+        const newSlides = [...heroSlides];
+        newSlides[index] = { ...newSlides[index], [field]: value };
+        setHeroSlides(newSlides);
+    };
+
     return (
-        <form onSubmit={handleFormSubmit} className="space-y-8">
+        <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-8" encType="multipart/form-data">
             <Card>
                 <CardHeader>
                     <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
@@ -365,26 +334,21 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                             </Button>
                             <h4 className="font-semibold">Diapositiva {index + 1}</h4>
                             <div className="grid gap-2">
-                                <Label htmlFor={`heroHeadline_${index}`}>Título</Label>
-                                <Input name={`heroHeadline_${index}`} defaultValue={slide.headline} required />
+                                <Label>Título</Label>
+                                <Input value={slide.headline} onChange={(e) => handleSlideTextChange(index, 'headline', e.target.value)} required />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor={`heroSubheadline_${index}`}>Subtítulo</Label>
-                                <Textarea name={`heroSubheadline_${index}`} defaultValue={slide.subheadline} required />
+                                <Label>Subtítulo</Label>
+                                <Textarea value={slide.subheadline} onChange={(e) => handleSlideTextChange(index, 'subheadline', e.target.value)} required />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor={`heroButtonText_${index}`}>Texto del Botón</Label>
-                                <Input name={`heroButtonText_${index}`} defaultValue={slide.buttonText} required />
+                                <Label>Texto del Botón</Label>
+                                <Input value={slide.buttonText} onChange={(e) => handleSlideTextChange(index, 'buttonText', e.target.value)} required />
                             </div>
                             <div className="grid gap-2">
                                 <Label>Imagen de Fondo</Label>
-                                <Input 
-                                  name={`heroImageFile_${index}`} 
-                                  type="file" 
-                                  accept="image/*" 
-                                  onChange={(e) => handleFileChange(index, e.target.files?.[0] || null)}
-                                />
-                                {slide.imageUrl && <img src={slide.imageUrl} alt="preview" className="h-16 w-auto rounded-md object-cover mt-2" />}
+                                <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
+                                {slide.imageUrl && <img src={getSafeImageUrl(slide.imageUrl)} alt="preview" className="h-16 w-auto rounded-md object-cover mt-2" />}
                             </div>
                         </div>
                     ))}
@@ -1095,10 +1059,10 @@ function DevelopersTab() {
                 <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
                     <Card className="flex flex-col items-center p-6 text-center">
                         <Avatar className="h-24 w-24 mb-4">
-                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 1" />
+                            <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
                             <AvatarFallback>JD</AvatarFallback>
                         </Avatar>
-                        <h3 className="text-lg font-semibold">Juan Developer</h3>
+                        <h3 className="text-lg font-semibold">Luis Miguel Fonce</h3>
                         <p className="text-muted-foreground">Lead Full-Stack Developer</p>
                         <p className="mt-2 text-sm text-center">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
                         <div className="flex gap-4 mt-4">
@@ -1108,23 +1072,7 @@ function DevelopersTab() {
                             <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
                         </div>
                     </Card>
-                    <Card className="flex flex-col items-center p-6 text-center">
-                        <Avatar className="h-24 w-24 mb-4">
-                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 2" />
-                            <AvatarFallback>AI</AvatarFallback>
-                        </Avatar>
-                        <h3 className="text-lg font-semibold">Ana Interfaz</h3>
-                        <p className="text-muted-foreground">UI/UX Designer</p>
-                        <p className="mt-2 text-sm text-center">Diseñando interfaces intuitivas y estéticamente agradables que mejoran la interacción del usuario.</p>
-                            <div className="flex gap-4 mt-4">
-                            <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
-                            <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
-                            <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
-                            <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
-                        </div>
-                    </Card>
-                </CardContent>
-            </Card>
+                    
             <Card>
                 <CardHeader>
                     <CardTitle>Stack Tecnológico</CardTitle>

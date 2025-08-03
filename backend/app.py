@@ -277,8 +277,30 @@ def handle_settings():
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
-                hero_images_json = request.form.get('heroImages', '[]')
+                # Reconstruct hero slides data from form fields and files
+                hero_slides = []
+                slides_data = json.loads(request.form.get('heroImagesData', '[]'))
                 
+                for i, slide_data in enumerate(slides_data):
+                    file_key = f'heroImageFile_{i}'
+                    new_slide = {
+                        'id': slide_data.get('id'),
+                        'headline': slide_data.get('headline'),
+                        'subheadline': slide_data.get('subheadline'),
+                        'buttonText': slide_data.get('buttonText'),
+                        'imageUrl': slide_data.get('imageUrl') # Keep existing image by default
+                    }
+                    
+                    if file_key in request.files and request.files[file_key].filename:
+                        file = request.files[file_key]
+                        data_uri = file_to_data_uri(file)
+                        if data_uri:
+                            new_slide['imageUrl'] = data_uri
+                    
+                    hero_slides.append(new_slide)
+
+                hero_images_json = json.dumps(hero_slides)
+
                 sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url, notifications_enabled)
                          VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                          ON CONFLICT (id) DO UPDATE SET
