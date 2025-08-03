@@ -92,6 +92,11 @@ function DashboardContent() {
     const productQuery = searchParams.get('q') || '';
     const adminQuery = searchParams.get('admin_q') || '';
     
+    const refreshSettings = async () => {
+        const settingsData = await fetchStoreSettings();
+        setStoreSettings(settingsData);
+    };
+
     useEffect(() => {
         async function loadData() {
             setLoading(true);
@@ -149,7 +154,7 @@ function DashboardContent() {
                 </TabsList>
 
                 <TabsContent value="overview">
-                    <OverviewTab products={products} />
+                    <OverviewTab products={products} settings={storeSettings} onSettingsChange={refreshSettings} />
                 </TabsContent>
                 <TabsContent value="products">
                    <ProductsTab products={products} currentPage={productCurrentPage} setCurrentPage={setProductCurrentPage} onSearch={handleSearch} query={productQuery} />
@@ -280,53 +285,55 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
     const { toast } = useToast();
     const router = useRouter();
     const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>(settings?.hero_images || []);
-    const formRef = React.useRef<HTMLFormElement>(null);
-
-    const handleAddSlide = () => {
-        setHeroSlides([...heroSlides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
+    
+    // This function will convert file to data URI
+    const fileToDataUri = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
     };
 
-    const handleRemoveSlide = (index: number) => {
-        setHeroSlides(heroSlides.filter((_, i) => i !== index));
-    };
-
-    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setIsSubmitting(true);
-        
-        const currentForm = formRef.current;
-        if (!currentForm) {
-            setIsSubmitting(false);
-            return;
-        }
+        const form = event.currentTarget;
+        const formData = new FormData(form);
 
-        const formData = new FormData(currentForm);
-        
-        const finalSlidesData = heroSlides.map((slide, index) => {
-            const headline = formData.get(`heroHeadline_${index}`) as string;
-            const subheadline = formData.get(`heroSubheadline_${index}`) as string;
-            const buttonText = formData.get(`heroButtonText_${index}`) as string;
-            const imageUrlFromUrlInput = formData.get(`heroImageUrl_${index}`) as string;
-            const imageFile = formData.get(`heroImageFile_${index}`) as File;
+        const heroImagesData = [];
+        for (let i = 0; i < heroSlides.length; i++) {
+            const imageFile = formData.get(`heroImageFile_${i}`) as File;
+            let imageUrl = formData.get(`heroImageUrl_${i}`) as string;
 
-            // Important: Prioritize URL input if file is not provided, otherwise keep existing imageUrl
-            let finalImageUrl = slide.imageUrl || '';
-            if (imageUrlFromUrlInput) {
-                finalImageUrl = imageUrlFromUrlInput;
+            if (imageFile && imageFile.size > 0) {
+                imageUrl = await fileToDataUri(imageFile);
             }
-            
-            return {
-                id: slide.id?.startsWith('new_') ? `slide_${Date.now()}_${index}` : slide.id,
-                headline,
-                subheadline,
-                buttonText,
-                imageUrl: finalImageUrl,
-            };
-        });
 
-        formData.set('heroImages', JSON.stringify(finalSlidesData));
+            heroImagesData.push({
+                id: heroSlides[i].id || `new_${Date.now()}`,
+                headline: formData.get(`heroHeadline_${i}`) as string,
+                subheadline: formData.get(`heroSubheadline_${i}`) as string,
+                buttonText: formData.get(`heroButtonText_${i}`) as string,
+                imageUrl: imageUrl || heroSlides[i].imageUrl, // Keep existing if no new one
+            });
+        }
         
-        const result = await updateStoreSettings(formData);
+        const finalFormData = new FormData();
+        finalFormData.append('heroImages', JSON.stringify(heroImagesData));
+        finalFormData.append('featuredCollectionTitle', formData.get('featuredCollectionTitle') as string);
+        finalFormData.append('featuredCollectionDescription', formData.get('featuredCollectionDescription') as string);
+        finalFormData.append('promoSectionTitle', formData.get('promoSectionTitle') as string);
+        finalFormData.append('promoSectionDescription', formData.get('promoSectionDescription') as string);
+        finalFormData.append('promoSectionVideoUrl', formData.get('promoSectionVideoUrl') as string);
+        finalFormData.append('phone', formData.get('phone') as string);
+        finalFormData.append('contactEmail', formData.get('contactEmail') as string);
+        finalFormData.append('twitterUrl', formData.get('twitterUrl') as string);
+        finalFormData.append('instagramUrl', formData.get('instagramUrl') as string);
+        finalFormData.append('facebookUrl', formData.get('facebookUrl') as string);
+
+        const result = await updateStoreSettings(finalFormData);
 
         if (result.success) {
             toast({
@@ -341,30 +348,19 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                 variant: "destructive",
             });
         }
-        
         setIsSubmitting(false);
+    };
+
+    const handleAddSlide = () => {
+        setHeroSlides([...heroSlides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
+    };
+
+    const handleRemoveSlide = (index: number) => {
+        setHeroSlides(heroSlides.filter((_, i) => i !== index));
     };
     
     return (
-        <form ref={formRef} onSubmit={handleSubmit} className="space-y-8" encType="multipart/form-data">
-            
-            <Card>
-                <CardHeader>
-                    <CardTitle>Notificaciones Emergentes</CardTitle>
-                    <CardDescription>Activa o desactiva los anuncios que aparecen al entrar al sitio.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center space-x-2">
-                        <Switch 
-                            id="notificationsEnabled" 
-                            name="notificationsEnabled" 
-                            defaultChecked={settings?.notifications_enabled}
-                        />
-                        <Label htmlFor="notificationsEnabled">Habilitar notificaciones</Label>
-                    </div>
-                </CardContent>
-            </Card>
-
+        <form onSubmit={handleFormSubmit} className="space-y-8">
             <Card>
                 <CardHeader>
                     <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
@@ -385,30 +381,31 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                             <h4 className="font-semibold">Diapositiva {index + 1}</h4>
                             <div className="grid gap-2">
                                 <Label htmlFor={`heroHeadline_${index}`}>Título</Label>
-                                <Input id={`heroHeadline_${index}`} name={`heroHeadline_${index}`} defaultValue={slide.headline} required />
+                                <Input name={`heroHeadline_${index}`} defaultValue={slide.headline} required />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor={`heroSubheadline_${index}`}>Subtítulo</Label>
-                                <Textarea id={`heroSubheadline_${index}`} name={`heroSubheadline_${index}`} defaultValue={slide.subheadline} required />
+                                <Textarea name={`heroSubheadline_${index}`} defaultValue={slide.subheadline} required />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor={`heroButtonText_${index}`}>Texto del Botón</Label>
-                                <Input id={`heroButtonText_${index}`} name={`heroButtonText_${index}`} defaultValue={slide.buttonText} required />
+                                <Input name={`heroButtonText_${index}`} defaultValue={slide.buttonText} required />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor={`heroImage_${index}`}>Imagen de Fondo</Label>
+                                <Label>Imagen de Fondo</Label>
                                 <Tabs defaultValue={slide.imageUrl && !slide.imageUrl.startsWith('data:') ? 'url' : 'upload'} className="w-full">
                                      <TabsList className="grid w-full grid-cols-2">
                                         <TabsTrigger value="url">URL</TabsTrigger>
                                         <TabsTrigger value="upload">Subir Archivo</TabsTrigger>
                                     </TabsList>
                                      <TabsContent value="url">
-                                        <Input name={`heroImageUrl_${index}`} placeholder="URL de la imagen" defaultValue={slide.imageUrl} />
+                                        <Input name={`heroImageUrl_${index}`} placeholder="URL de la imagen" defaultValue={slide.imageUrl?.startsWith('data:') ? '' : slide.imageUrl} />
                                     </TabsContent>
                                     <TabsContent value="upload">
                                         <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
                                     </TabsContent>
                                 </Tabs>
+                                {slide.imageUrl && <img src={slide.imageUrl} alt="preview" className="h-16 w-auto rounded-md object-cover mt-2" />}
                             </div>
                         </div>
                     ))}
@@ -426,12 +423,12 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                 <CardContent className="space-y-4">
                     <div className="grid gap-2">
                         <Label htmlFor="featuredCollectionTitle">Título de la Sección</Label>
-                        <Input id="featuredCollectionTitle" name="featuredCollectionTitle" defaultValue={settings?.featured_collection_title} placeholder="COLECCIÓN ROYAL SERIES" required />
+                        <Input name="featuredCollectionTitle" defaultValue={settings?.featured_collection_title} placeholder="COLECCIÓN ROYAL SERIES" required />
                          <p className="text-sm text-muted-foreground">El título sobre la cuadrícula de productos destacados.</p>
                     </div>
                      <div className="grid gap-2">
                         <Label htmlFor="featuredCollectionDescription">Descripción de la Colección</Label>
-                        <Textarea id="featuredCollectionDescription" name="featuredCollectionDescription" defaultValue={settings?.featured_collection_description} placeholder="La Royal Series ofrece una gama de relojes..." />
+                        <Textarea name="featuredCollectionDescription" defaultValue={settings?.featured_collection_description} placeholder="La Royal Series ofrece una gama de relojes..." />
                          <p className="text-sm text-muted-foreground">Un texto descriptivo para la colección destacada.</p>
                     </div>
                 </CardContent>
@@ -445,15 +442,15 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                 <CardContent className="space-y-4">
                      <div className="grid gap-2">
                         <Label htmlFor="promoSectionTitle">Título de la Sección Promo</Label>
-                        <Input id="promoSectionTitle" name="promoSectionTitle" defaultValue={settings?.promo_section_title} placeholder="ROYAL DELUXE" />
+                        <Input name="promoSectionTitle" defaultValue={settings?.promo_section_title} placeholder="ROYAL DELUXE" />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="promoSectionDescription">Descripción de la Sección Promo</Label>
-                        <Textarea id="promoSectionDescription" name="promoSectionDescription" defaultValue={settings?.promo_section_description} placeholder="Descubre la elegancia y la innovación..." />
+                        <Textarea name="promoSectionDescription" defaultValue={settings?.promo_section_description} placeholder="Descubre la elegancia y la innovación..." />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="promoSectionVideoUrl">URL del Video de YouTube (Embed)</Label>
-                        <Input id="promoSectionVideoUrl" name="promoSectionVideoUrl" defaultValue={settings?.promo_section_video_url} placeholder="https://www.youtube.com/embed/VIDEO_ID" />
+                        <Input name="promoSectionVideoUrl" defaultValue={settings?.promo_section_video_url} placeholder="https://www.youtube.com/embed/VIDEO_ID" />
                         <p className="text-sm text-muted-foreground">Importante: Usa la URL para "Embed" (Insertar), no la URL normal del video.</p>
                     </div>
                 </CardContent>
@@ -467,23 +464,23 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                 <CardContent className="space-y-4">
                      <div className="grid gap-2">
                         <Label htmlFor="phone">Teléfono de Contacto</Label>
-                        <Input id="phone" name="phone" defaultValue={settings?.phone} />
+                        <Input name="phone" defaultValue={settings?.phone} />
                     </div>
                      <div className="grid gap-2">
                         <Label htmlFor="contactEmail">Email de Contacto</Label>
-                        <Input id="contactEmail" name="contactEmail" type="email" defaultValue={settings?.contact_email} />
+                        <Input name="contactEmail" type="email" defaultValue={settings?.contact_email} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="twitterUrl">URL de Twitter (X)</Label>
-                        <Input id="twitterUrl" name="twitterUrl" defaultValue={settings?.twitter_url} />
+                        <Input name="twitterUrl" defaultValue={settings?.twitter_url} />
                     </div>
                      <div className="grid gap-2">
                         <Label htmlFor="instagramUrl">URL de Instagram</Label>
-                        <Input id="instagramUrl" name="instagramUrl" defaultValue={settings?.instagram_url} />
+                        <Input name="instagramUrl" defaultValue={settings?.instagram_url} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="facebookUrl">URL de Facebook</Label>
-                        <Input id="facebookUrl" name="facebookUrl" defaultValue={settings?.facebook_url} />
+                        <Input name="facebookUrl" defaultValue={settings?.facebook_url} />
                     </div>
                 </CardContent>
             </Card>
@@ -583,7 +580,7 @@ function DatabaseViewer() {
     )
 }
 
-function OverviewTab({ products }: { products: Product[] }) {
+function OverviewTab({ products, settings, onSettingsChange }: { products: Product[], settings: StoreSettings | null, onSettingsChange: () => void }) {
     const [isSendingNotification, setIsSendingNotification] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [invoiceItems, setInvoiceItems] = useState<{ product: Product; quantity: number }[]>([]);
@@ -689,16 +686,56 @@ function OverviewTab({ products }: { products: Product[] }) {
         }
         setIsSendingNotification(false);
     };
+    
+    const handleNotificationToggle = async (checked: boolean) => {
+        const formData = new FormData();
+        // Append all existing settings to not lose them
+        Object.entries(settings || {}).forEach(([key, value]) => {
+            if (key === 'hero_images') {
+                formData.append(key, JSON.stringify(value));
+            } else if (value !== null && value !== undefined) {
+                 formData.append(key, String(value));
+            }
+        });
+        formData.set('notificationsEnabled', checked ? 'on' : 'off');
+        
+        const result = await updateStoreSettings(formData);
+         if (result.success) {
+            toast({
+                title: "Éxito",
+                description: `Notificaciones ${checked ? 'habilitadas' : 'deshabilitadas'}.`,
+            });
+            onSettingsChange(); // Refresh settings in parent
+        } else {
+            toast({
+                title: "Error",
+                description: result.error || "No se pudo actualizar la configuración.",
+                variant: "destructive",
+            });
+        }
+    };
 
     return (
         <div className="grid gap-4 md:grid-cols-2">
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Enviar Notificación Personalizada</CardTitle>
+                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                    <div>
+                        <CardTitle className="text-sm font-medium">Enviar Notificación Personalizada</CardTitle>
+                        <CardDescription className="text-xs pt-1">Anuncia ofertas, lanzamientos y más.</CardDescription>
+                    </div>
                     <BellRing className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                     <form ref={notificationFormRef} onSubmit={handleNotificationSubmit} className="flex flex-col gap-4">
+                        <div className="flex items-center space-x-2 pt-4">
+                            <Switch 
+                                id="notificationsEnabledToggle" 
+                                checked={settings?.notifications_enabled}
+                                onCheckedChange={handleNotificationToggle}
+                            />
+                            <Label htmlFor="notificationsEnabledToggle">Habilitar notificaciones en el sitio</Label>
+                        </div>
+                        <Separator />
                         <div className="grid gap-2">
                             <Label htmlFor="title">Título</Label>
                             <Input id="title" name="title" placeholder="¡Nuevo Lanzamiento!" required />
