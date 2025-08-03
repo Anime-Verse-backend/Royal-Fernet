@@ -72,7 +72,7 @@ import {
     AvatarImage,
 } from "@/components/ui/avatar";
 import { formatCurrency, getSafeImageUrl } from '@/lib/utils';
-import { Separator } from '@/components/ui/separator';
+import { Switch } from "@/components/ui/switch";
 
 // Main page component
 export default function AdminDashboardPage() {
@@ -174,8 +174,6 @@ function DashboardContent() {
     );
 }
 
-
-// ... Rest of the components (OverviewTab, ProductsTab, etc.) will go here
 const WhatsappIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg viewBox="0 0 32 32" fill="currentColor" {...props}>
       <path d="M19.11 17.205c-.372 0-1.088 1.39-1.518 1.39a.63.63 0 01-.315-.1c-.802-.402-1.504-.817-2.163-1.447-.545-.516-1.146-1.29-1.46-1.963a.426.426 0 01-.073-.215c0-.33.99-.945.99-1.49 0-.143-.73-2.09-.832-2.335-.143-.372-.214-.487-.6-.487-.187 0-.36-.044-.53-.044-.302 0-.53.115-.746.315-.688.645-1.032 1.318-1.06 2.264v.114c-.015.99.472 1.977 1.017 2.78 1.23 1.82 2.506 3.41 4.554 4.34.616.287 2.035.888 2.722.888.817 0 2.15-.515 2.52-1.29.372-.775.372-1.457.234-1.828-.156-.389-.42-.516-.6-.516h-.114zM16 2.098a13.91 13.91 0 00-13.908 13.909c0 4.38 2.016 8.33 5.303 10.942l-1.6 5.844 5.973-1.566c1.63.888 3.444 1.374 5.292 1.374a13.91 13.91 0 100-27.817z" />
@@ -217,7 +215,7 @@ function ProductForm({ product, onFormSubmit }: { product?: Product, onFormSubmi
                 <div key={i} className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor={`image${i}`} className="text-right">Imagen {i}</Label>
                     <div className="col-span-3">
-                         <Tabs defaultValue={product?.images?.[i-1] ? 'url' : 'upload'} className="w-full">
+                         <Tabs defaultValue={product?.images?.[i-1] && !product?.images?.[i-1].startsWith('data:') ? 'url' : 'upload'} className="w-full">
                             <TabsList className="grid w-full grid-cols-2">
                                 <TabsTrigger value="url">URL</TabsTrigger>
                                 <TabsTrigger value="upload">Subir Archivo</TabsTrigger>
@@ -308,14 +306,21 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
             const headline = formData.get(`heroHeadline_${index}`) as string;
             const subheadline = formData.get(`heroSubheadline_${index}`) as string;
             const buttonText = formData.get(`heroButtonText_${index}`) as string;
-            const imageUrl = formData.get(`heroImageUrl_${index}`) as string;
+            const imageUrlFromUrlInput = formData.get(`heroImageUrl_${index}`) as string;
+            const imageFile = formData.get(`heroImageFile_${index}`) as File;
+
+            // Important: Prioritize URL input if file is not provided, otherwise keep existing imageUrl
+            let finalImageUrl = slide.imageUrl || '';
+            if (imageUrlFromUrlInput) {
+                finalImageUrl = imageUrlFromUrlInput;
+            }
             
             return {
                 id: slide.id?.startsWith('new_') ? `slide_${Date.now()}_${index}` : slide.id,
                 headline,
                 subheadline,
                 buttonText,
-                imageUrl,
+                imageUrl: finalImageUrl,
             };
         });
 
@@ -341,7 +346,25 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
     };
     
     return (
-        <form ref={formRef} onSubmit={handleSubmit} className="space-y-6" encType="multipart/form-data">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-8" encType="multipart/form-data">
+            
+            <Card>
+                <CardHeader>
+                    <CardTitle>Notificaciones Emergentes</CardTitle>
+                    <CardDescription>Activa o desactiva los anuncios que aparecen al entrar al sitio.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center space-x-2">
+                        <Switch 
+                            id="notificationsEnabled" 
+                            name="notificationsEnabled" 
+                            defaultChecked={settings?.notifications_enabled}
+                        />
+                        <Label htmlFor="notificationsEnabled">Habilitar notificaciones</Label>
+                    </div>
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader>
                     <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
@@ -374,7 +397,7 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor={`heroImage_${index}`}>Imagen de Fondo</Label>
-                                <Tabs defaultValue={slide.imageUrl ? 'url' : 'upload'} className="w-full">
+                                <Tabs defaultValue={slide.imageUrl && !slide.imageUrl.startsWith('data:') ? 'url' : 'upload'} className="w-full">
                                      <TabsList className="grid w-full grid-cols-2">
                                         <TabsTrigger value="url">URL</TabsTrigger>
                                         <TabsTrigger value="upload">Subir Archivo</TabsTrigger>
@@ -1232,7 +1255,4 @@ function StoreFormDialog({ isOpen, onClose, onSubmitSuccess, store }: { isOpen: 
     );
 }
 
-
-    
-
-    
+  

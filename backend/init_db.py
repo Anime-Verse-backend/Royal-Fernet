@@ -25,24 +25,21 @@ def get_db_connection():
         logging.error(f"Error connecting to PostgreSQL server in init_db: {e}")
         exit(1)
 
-def alter_notifications_table(cursor):
-    """Checks for the existence of the 'title' column and adds it if it doesn't exist."""
+def alter_table_add_column(cursor, table_name, column_name, column_type):
+    """Checks for the existence of a column and adds it if it doesn't exist."""
     try:
-        # Check if the column 'title' exists
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT 1 FROM information_schema.columns
-            WHERE table_name='notifications' AND column_name='title';
+            WHERE table_name='{table_name}' AND column_name='{column_name}';
         """)
         exists = cursor.fetchone()
         if not exists:
-            cursor.execute("ALTER TABLE notifications ADD COLUMN title TEXT;")
-            print("   - Column 'title' added to 'notifications' table.")
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type};")
+            print(f"   - Column '{column_name}' added to '{table_name}' table.")
         else:
-            print("   - Column 'title' already exists in 'notifications' table.")
-
+            print(f"   - Column '{column_name}' already exists in '{table_name}' table.")
     except psycopg2.Error as e:
-        print(f"   - Could not alter 'notifications' table: {e}")
-        # It's okay to pass here if the table doesn't exist yet, it will be created.
+        print(f"   - Could not alter '{table_name}' table for column '{column_name}': {e}")
 
 def initialize_database():
     conn = get_db_connection()
@@ -118,8 +115,8 @@ def initialize_database():
                 print(f"✅ Table '{table_name}' created or already exists.")
 
             # --- Table Alterations ---
-            # Specifically ensure the 'notifications' table has the 'title' column
-            alter_notifications_table(cursor)
+            alter_table_add_column(cursor, 'notifications', 'title', 'TEXT')
+            alter_table_add_column(cursor, 'settings', 'notifications_enabled', 'BOOLEAN DEFAULT TRUE')
             
             conn.commit()
             print("\n🎉 Database schema initialization complete!")
@@ -162,9 +159,9 @@ def seed_data():
                     {"id": "slide1", "headline": "Elegancia Atemporal", "subheadline": "Descubre nuestra colección exclusiva.", "buttonText": "Explorar", "imageUrl": "https://site-2206080.mozfiles.com/files/WhatsApp%20Image%202024-07-16%20at%2011.45.24.jpeg"},
                     {"id": "slide2", "headline": "Innovación en Cada Segundo", "subheadline": "Nuevos modelos con tecnología de punta.", "buttonText": "Ver Novedades", "imageUrl": "https://images.pexels.com/photos/190819/pexels-photo-190819.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1"}
                 ])
-                sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url)
-                         VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-                values = (hero_images, "COLECCIÓN ROYAL SERIES", "Relojes para quienes valoran la distinción.", "ROYAL DELUXE", "Descubre la elegancia y la innovación.", "https://www.youtube.com/embed/dQw4w9WgXcQ", "+15551234567", "contacto@royalfernet.com", "#", "#", "#")
+                sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url, notifications_enabled)
+                         VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                values = (hero_images, "COLECCIÓN ROYAL SERIES", "Relojes para quienes valoran la distinción.", "ROYAL DELUXE", "Descubre la elegancia y la innovación.", "https://www.youtube.com/embed/dQw4w9WgXcQ", "+15551234567", "contacto@royalfernet.com", "#", "#", "#", True)
                 cursor.execute(sql, values)
                 print("   - Default store settings inserted.")
             
@@ -209,3 +206,4 @@ if __name__ == '__main__':
     main()
 
     
+  

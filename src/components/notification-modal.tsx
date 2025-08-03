@@ -8,8 +8,8 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { fetchLatestNotification } from '@/lib/data';
-import type { Notification } from '@/lib/definitions';
+import { fetchLatestNotification, fetchStoreSettings } from '@/lib/data';
+import type { Notification, StoreSettings } from '@/lib/definitions';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,14 +27,21 @@ import { Check, Star, Clock, ArrowRight } from 'lucide-react';
 
 export function NotificationModal() {
   const [notification, setNotification] = useState<Notification | null>(null);
+  const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     const hasSeenNotification = sessionStorage.getItem('notification_seen');
     if (!hasSeenNotification) {
-      fetchLatestNotification().then(data => {
-        if (data) {
-          setNotification(data);
+      // Fetch both settings and notification in parallel
+      Promise.all([
+        fetchStoreSettings(),
+        fetchLatestNotification()
+      ]).then(([settingsData, notificationData]) => {
+        setSettings(settingsData);
+        // Only show modal if notifications are enabled in settings and a notification exists
+        if (settingsData?.notifications_enabled && notificationData) {
+          setNotification(notificationData);
           setIsOpen(true);
           sessionStorage.setItem('notification_seen', 'true');
         }
@@ -110,3 +117,5 @@ export function NotificationModal() {
     </Dialog>
   );
 }
+
+  

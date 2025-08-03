@@ -56,6 +56,7 @@ export type StoreSettings = {
   twitter_url?: string;
   instagram_url?: string;
   facebook_url?: string;
+  notifications_enabled?: boolean;
 };
 
 export interface StoreLocation {
@@ -70,3 +71,4 @@ export interface StoreLocation {
 }
 
     
+  

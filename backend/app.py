@@ -296,8 +296,8 @@ def handle_settings():
                     
                     processed_hero_images.append(processed_slide)
 
-                sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url)
-                         VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url, notifications_enabled)
+                         VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                          ON CONFLICT (id) DO UPDATE SET
                          hero_images = EXCLUDED.hero_images,
                          featured_collection_title = EXCLUDED.featured_collection_title,
@@ -309,12 +309,14 @@ def handle_settings():
                          contact_email = EXCLUDED.contact_email,
                          twitter_url = EXCLUDED.twitter_url,
                          instagram_url = EXCLUDED.instagram_url,
-                         facebook_url = EXCLUDED.facebook_url
+                         facebook_url = EXCLUDED.facebook_url,
+                         notifications_enabled = EXCLUDED.notifications_enabled
                          RETURNING *"""
                 values = (
                     json.dumps(processed_hero_images), request.form.get('featuredCollectionTitle'), request.form.get('featuredCollectionDescription'),
                     request.form.get('promoSectionTitle'), request.form.get('promoSectionDescription'), request.form.get('promoSectionVideoUrl'),
-                    request.form.get('phone'), request.form.get('contactEmail'), request.form.get('twitterUrl'), request.form.get('instagramUrl'), request.form.get('facebookUrl')
+                    request.form.get('phone'), request.form.get('contactEmail'), request.form.get('twitterUrl'), request.form.get('instagramUrl'), request.form.get('facebookUrl'),
+                    request.form.get('notificationsEnabled') == 'on'
                 )
                 cursor.execute(sql, values)
                 settings = dict(cursor.fetchone())
@@ -605,3 +607,4 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port)
 
     
+  
