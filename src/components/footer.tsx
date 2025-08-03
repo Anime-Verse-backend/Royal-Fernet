@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Componente del pie de página de la aplicación.
  * Muestra información de contacto, enlaces de navegación, redes sociales,
@@ -32,6 +33,7 @@ export function Footer() {
               <ul className="space-y-1">
                 <li><Link href="/catalog" className="text-muted-foreground hover:text-primary">Catalog</Link></li>
                 <li><Link href="/#featured" className="text-muted-foreground hover:text-primary">Featured</Link></li>
+                <li><Link href="/stores" className="text-muted-foreground hover:text-primary">Nuestras Tiendas</Link></li>
                 <li><Link href="/developers" className="text-muted-foreground hover:text-primary">Developers</Link></li>
               </ul>
             </div>
@@ -55,7 +57,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-12 pt-8 border-t border-border text-center text-muted-foreground text-sm">
-          <p>&copy; {year} Royal-Fernet all rights reserved.</p>
+          <p>&copy; {year} Royal-Fernet. All rights reserved.</p>
         </div>
       </div>
     </footer>

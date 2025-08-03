@@ -6,7 +6,6 @@
  * y información sobre la tienda física.
  */
 import * as React from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ProductCarousel } from '@/components/product-carousel';
@@ -14,7 +13,6 @@ import { fetchProducts, fetchStoreSettings } from '@/lib/data';
 import type { StoreSettings } from '@/lib/definitions';
 import { HeroCarousel } from '@/components/hero-carousel';
 import { TestimonialsSection } from '@/components/testimonials-section';
-import { MapPin } from 'lucide-react';
 
 export const revalidate = 0; 
 
@@ -28,13 +26,17 @@ const defaultSettings: StoreSettings = {
     imageUrl: "https://placehold.co/1920x1080.png"
   }],
   featured_collection_title: "Colección Destacada",
+  featured_collection_description: "Relojes para quienes valoran la distinción.",
+  promo_section_title: "ROYAL DELUXE",
+  promo_section_description: "Descubre la elegancia y la innovación.",
+  promo_section_video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
 };
 
 export default async function Home() {
   const products = await fetchProducts();
   const featuredProducts = products.filter(p => p.is_featured);
   const settings = await fetchStoreSettings();
-  const storeInfo = { ...defaultSettings, ...settings };
+  const storeInfo = settings || defaultSettings;
 
   return (
     <div className="flex flex-col">
