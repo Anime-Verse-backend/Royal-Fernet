@@ -23,6 +23,9 @@ load_dotenv()
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# Set the maximum content length to 16MB. This is the correct place to handle large request bodies.
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
+
 # --- CORS Configuration ---
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:9002')
 CORS(app, resources={r"/*": {"origins": [FRONTEND_URL, "http://localhost:9002"], "supports_credentials": True}})
@@ -601,5 +604,8 @@ if __name__ == '__main__':
 
     
   
+
+    
+
 
     
