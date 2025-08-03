@@ -30,11 +30,22 @@ export function HeroCarousel({ slides }: HeroCarouselProps) {
     };
   }, [emblaApi]);
 
+  if (!slides || slides.length === 0) {
+    return (
+        <section className="relative w-full h-[60vh] md:h-[80vh] bg-muted flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
+                <p>No slides to display.</p>
+                <p className="text-sm">Please add slides in the admin dashboard.</p>
+            </div>
+        </section>
+    );
+  }
+
   return (
     <section className="relative w-full h-[60vh] md:h-[80vh] overflow-hidden" ref={emblaRef}>
       <div className="flex h-full">
-        {slides.map((slide) => (
-          <div key={slide.id} className="relative flex-[0_0_100%] h-full">
+        {slides.map((slide, index) => (
+          <div key={slide.id || index} className="relative flex-[0_0_100%] h-full">
             <Image
               src={getSafeImageUrl(slide.imageUrl, '1920x1080')}
               alt={slide.headline}

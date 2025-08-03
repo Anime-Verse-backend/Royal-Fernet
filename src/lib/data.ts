@@ -34,6 +34,7 @@ export async function fetchProducts(query?: string): Promise<Product[]> {
       return [];
     }
     let products: Product[] = await res.json();
+    // Ordena para que los productos destacados aparezcan primero
     products.sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0));
     return products;
   } catch (error) {
@@ -68,8 +69,14 @@ export async function fetchStoreSettings(): Promise<StoreSettings | null> {
       return null;
     }
     const settings = await res.json();
-    if (typeof settings.hero_images === 'string') {
-        settings.hero_images = JSON.parse(settings.hero_images);
+    // The hero_images from the DB is a JSON string. We need to parse it.
+    if (settings && typeof settings.hero_images === 'string') {
+        try {
+            settings.hero_images = JSON.parse(settings.hero_images);
+        } catch (e) {
+            console.error("Failed to parse hero_images from settings:", e);
+            settings.hero_images = []; // Set to empty array on parse error
+        }
     }
     return settings;
   } catch (error) {
