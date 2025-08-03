@@ -274,88 +274,60 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
 }
 
 function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | null; onUpdate: () => void; }) {
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
-    const formRef = useRef<HTMLFormElement>(null);
-
-    // Initialize state with data from props
-    const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>(settings?.hero_images || []);
-
-    useEffect(() => {
-        setHeroSlides(settings?.hero_images || []);
-    }, [settings]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setIsSubmitting(true);
-
-        const formData = new FormData(formRef.current!);
-        // Append hero slides data as a JSON string to be reconstructed in the backend
-        formData.append('heroImagesData', JSON.stringify(heroSlides));
-
+        const formData = new FormData(event.currentTarget);
         const result = await updateStoreSettings(formData);
 
         if (result.success) {
             toast({ title: "Éxito", description: "La configuración se ha guardado." });
-            onUpdate();
+            onUpdate(); // Refresh data in parent
         } else {
             toast({ title: "Error", description: result.error, variant: "destructive" });
         }
-
         setIsSubmitting(false);
     };
 
-    const handleAddSlide = () => {
-        setHeroSlides([...heroSlides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
-    };
-
-    const handleRemoveSlide = (index: number) => {
-        setHeroSlides(heroSlides.filter((_, i) => i !== index));
-    };
-
-    const handleSlideTextChange = (index: number, field: keyof HeroSlide, value: string) => {
-        const newSlides = [...heroSlides];
-        newSlides[index] = { ...newSlides[index], [field]: value };
-        setHeroSlides(newSlides);
-    };
-
     return (
-        <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-8" encType="multipart/form-data">
+        <form onSubmit={handleFormSubmit} className="space-y-8" encType="multipart/form-data">
             <Card>
                 <CardHeader>
                     <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
                     <CardDescription>Personaliza las diapositivas del carrusel principal.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    {heroSlides.map((slide, index) => (
-                        <div key={slide.id || index} className="space-y-4 p-4 border rounded-lg relative">
-                            <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive" onClick={() => handleRemoveSlide(index)}>
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
+                    {(settings?.hero_images || [{}, {}]).map((slide, index) => (
+                        <div key={slide.id || index} className="space-y-4 p-4 border rounded-lg">
                             <h4 className="font-semibold">Diapositiva {index + 1}</h4>
+                            <input type="hidden" name={`heroImageId_${index}`} defaultValue={slide.id}/>
                             <div className="grid gap-2">
                                 <Label>Título</Label>
-                                <Input value={slide.headline} onChange={(e) => handleSlideTextChange(index, 'headline', e.target.value)} required />
+                                <Input name={`heroHeadline_${index}`} defaultValue={slide.headline} required />
                             </div>
                             <div className="grid gap-2">
                                 <Label>Subtítulo</Label>
-                                <Textarea value={slide.subheadline} onChange={(e) => handleSlideTextChange(index, 'subheadline', e.target.value)} required />
+                                <Textarea name={`heroSubheadline_${index}`} defaultValue={slide.subheadline} required />
                             </div>
                             <div className="grid gap-2">
                                 <Label>Texto del Botón</Label>
-                                <Input value={slide.buttonText} onChange={(e) => handleSlideTextChange(index, 'buttonText', e.target.value)} required />
+                                <Input name={`heroButtonText_${index}`} defaultValue={slide.buttonText} required />
                             </div>
                             <div className="grid gap-2">
                                 <Label>Imagen de Fondo</Label>
                                 <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
-                                {slide.imageUrl && <img src={getSafeImageUrl(slide.imageUrl)} alt="preview" className="h-16 w-auto rounded-md object-cover mt-2" />}
+                                {slide.imageUrl && (
+                                    <div className="mt-2">
+                                        <p className="text-sm text-muted-foreground">Imagen actual:</p>
+                                        <img src={getSafeImageUrl(slide.imageUrl)} alt="preview" className="h-16 w-auto rounded-md object-cover mt-1" />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
-                    <Button type="button" variant="outline" onClick={handleAddSlide}>
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Añadir Slide
-                    </Button>
                 </CardContent>
             </Card>
 
@@ -1057,7 +1029,7 @@ function DevelopersTab() {
                     <CardDescription>Conoce a las personas detrás de la magia.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
-                    <Card className="flex flex-col items-center p-6 text-center">
+                     <Card className="flex flex-col items-center p-6 text-center">
                         <Avatar className="h-24 w-24 mb-4">
                             <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
                             <AvatarFallback>JD</AvatarFallback>
@@ -1073,6 +1045,9 @@ function DevelopersTab() {
                         </div>
                     </Card>
                     
+                    
+                </CardContent>
+            </Card>
             <Card>
                 <CardHeader>
                     <CardTitle>Stack Tecnológico</CardTitle>
