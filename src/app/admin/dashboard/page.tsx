@@ -276,65 +276,23 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
 function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | null; onUpdate: () => void; }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
-    // Local state for hero slides to manage additions/removals and file previews
-    const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>([]);
+    const [heroSlides, setHeroSlides] = useState<(Partial<HeroSlide> & { file?: File })[]>([]);
+    const formRef = React.useRef<HTMLFormElement>(null);
 
     useEffect(() => {
-        // Initialize local state when settings data is available
         setHeroSlides(settings?.hero_images || []);
     }, [settings]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
         const file = e.target.files?.[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const newSlides = [...heroSlides];
-                newSlides[index].imageUrl = reader.result as string; // Preview as Data URI
-                setHeroSlides(newSlides);
-            };
-            reader.readAsDataURL(file);
+            const newSlides = [...heroSlides];
+            newSlides[index].file = file; // Store the file object
+            newSlides[index].imageUrl = URL.createObjectURL(file); // For local preview
+            setHeroSlides(newSlides);
         }
     };
-
-    const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        setIsSubmitting(true);
-
-        const form = event.currentTarget;
-        const baseFormData = new FormData(form);
-        const finalFormData = new FormData();
-        
-        // This is the correct way to get all other text fields
-        for (const [key, value] of baseFormData.entries()) {
-             if (!key.startsWith('heroImageFile_')) {
-                finalFormData.append(key, value);
-             }
-        }
-        
-        const heroImagesData = heroSlides.map((slide) => ({
-            ...slide,
-            id: slide.id || `new_${Date.now()}`
-        }));
-        
-        finalFormData.append('heroImages', JSON.stringify(heroImagesData));
-        
-        try {
-            const result = await updateStoreSettings(finalFormData);
-
-            if (result.success) {
-                toast({ title: "Éxito", description: "La configuración se ha guardado." });
-                onUpdate();
-            } else {
-                toast({ title: "Error", description: result.error, variant: "destructive" });
-            }
-        } catch (error) {
-            toast({ title: "Error de Formulario", description: `No se pudo procesar el formulario.`, variant: "destructive" });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
+    
     const handleAddSlide = () => {
         setHeroSlides([...heroSlides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
     };
@@ -343,8 +301,51 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
         setHeroSlides(heroSlides.filter((_, i) => i !== index));
     };
 
+    const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setIsSubmitting(true);
+
+        const form = event.currentTarget;
+        const formData = new FormData(form);
+
+        // This function converts a file to a Data URI
+        const toDataURL = (file: File): Promise<string> => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+
+        try {
+            // Process slides: convert new files to Data URIs
+            const processedSlides = await Promise.all(heroSlides.map(async (slide) => {
+                if (slide.file) {
+                    const dataUrl = await toDataURL(slide.file);
+                    return { ...slide, imageUrl: dataUrl, file: undefined };
+                }
+                return slide;
+            }));
+
+            // Append the processed slides as a JSON string
+            formData.append('heroImages', JSON.stringify(processedSlides));
+            
+            const result = await updateStoreSettings(formData);
+
+            if (result.success) {
+                toast({ title: "Éxito", description: "La configuración se ha guardado." });
+                onUpdate();
+            } else {
+                toast({ title: "Error", description: result.error, variant: "destructive" });
+            }
+        } catch (error: any) {
+            toast({ title: "Error de Formulario", description: error.message || `No se pudo procesar el formulario.`, variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     return (
-        <form onSubmit={handleFormSubmit} className="space-y-8">
+        <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-8">
             <Card>
                 <CardHeader>
                     <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
@@ -365,7 +366,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                             <h4 className="font-semibold">Diapositiva {index + 1}</h4>
                             <div className="grid gap-2">
                                 <Label htmlFor={`heroHeadline_${index}`}>Título</Label>
-                                <Input name={`heroHeadline_${index}`} defaultValue={slide.headline} required />
+                                <Input name="featuredCollectionTitle" defaultValue={slide.headline} required />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor={`heroSubheadline_${index}`}>Subtítulo</Label>
@@ -388,7 +389,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                     </Button>
                 </CardContent>
             </Card>
-
+            
             <Card>
                 <CardHeader>
                     <CardTitle>Sección de Colección Destacada</CardTitle>
@@ -450,6 +451,22 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                         <Label htmlFor="facebookUrl">URL de Facebook</Label>
                         <Input name="facebookUrl" defaultValue={settings?.facebook_url} />
                     </div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Notificaciones</CardTitle>
+                    <CardDescription>Habilita o deshabilita las notificaciones emergentes en el sitio.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center space-x-2">
+                        <Switch
+                          id="notificationsEnabled"
+                          name="notificationsEnabled"
+                          defaultChecked={settings?.notifications_enabled ?? true}
+                        />
+                        <Label htmlFor="notificationsEnabled">Habilitar Notificaciones</Label>
+                      </div>
                 </CardContent>
             </Card>
 
@@ -655,26 +672,6 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
         setIsSendingNotification(false);
     };
     
-    const handleNotificationToggle = async (checked: boolean) => {
-        const formData = new FormData();
-        formData.append('notificationsEnabled', checked ? 'on' : 'off');
-        
-        const result = await updateStoreSettings(formData);
-        if (result.success) {
-            toast({
-                title: "Éxito",
-                description: `Notificaciones ${checked ? 'habilitadas' : 'deshabilitadas'}.`,
-            });
-            onSettingsChange(); 
-        } else {
-            toast({
-                title: "Error",
-                description: result.error || "No se pudo actualizar la configuración.",
-                variant: "destructive",
-            });
-        }
-    };
-
     return (
         <div className="grid gap-4 md:grid-cols-2">
             <Card>
@@ -683,17 +680,6 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
                         <CardTitle className="text-sm font-medium">Notificaciones Globales</CardTitle>
                         <CardDescription className="text-xs pt-1">Anuncia ofertas, lanzamientos y más.</CardDescription>
                     </div>
-                     <form>
-                        <div className="flex items-center space-x-2">
-                            <Switch 
-                                id="notificationsEnabledToggle" 
-                                name="notificationsEnabled"
-                                checked={settings?.notifications_enabled ?? true}
-                                onCheckedChange={handleNotificationToggle}
-                                />
-                            <Label htmlFor="notificationsEnabledToggle">Habilitadas</Label>
-                        </div>
-                    </form>
                 </CardHeader>
                 <CardContent>
                     <form ref={notificationFormRef} onSubmit={handleNotificationSubmit} className="flex flex-col gap-4 pt-4 border-t">
@@ -1061,13 +1047,28 @@ function DevelopersTab() {
                 <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
                     <Card className="flex flex-col items-center p-6 text-center">
                         <Avatar className="h-24 w-24 mb-4">
-                            <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
-                            <AvatarFallback>lM</AvatarFallback>
+                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 1" />
+                            <AvatarFallback>JD</AvatarFallback>
                         </Avatar>
-                        <h3 className="text-lg font-semibold">LUIS MIGUEL FONCE</h3>
+                        <h3 className="text-lg font-semibold">Juan Developer</h3>
                         <p className="text-muted-foreground">Lead Full-Stack Developer</p>
                         <p className="mt-2 text-sm text-center">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
                         <div className="flex gap-4 mt-4">
+                            <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
+                        </div>
+                    </Card>
+                    <Card className="flex flex-col items-center p-6 text-center">
+                        <Avatar className="h-24 w-24 mb-4">
+                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 2" />
+                            <AvatarFallback>AI</AvatarFallback>
+                        </Avatar>
+                        <h3 className="text-lg font-semibold">Ana Interfaz</h3>
+                        <p className="text-muted-foreground">UI/UX Designer</p>
+                        <p className="mt-2 text-sm text-center">Diseñando interfaces intuitivas y estéticamente agradables que mejoran la interacción del usuario.</p>
+                            <div className="flex gap-4 mt-4">
                             <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
                             <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
                             <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
