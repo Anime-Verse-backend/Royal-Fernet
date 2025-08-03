@@ -74,6 +74,7 @@ import {
 import { formatCurrency, getSafeImageUrl } from '@/lib/utils';
 import { Switch } from "@/components/ui/switch";
 import { Separator } from '@/components/ui/separator';
+import imageCompression from 'browser-image-compression';
 
 // Main page component
 export default function AdminDashboardPage() {
@@ -275,22 +276,35 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
 
 function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | null; onUpdate: () => void; }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [heroSlides, setHeroSlides] = useState<(Partial<HeroSlide> & { file?: File | null, dataUrl?: string | null })[]>([]);
+    const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>([]);
     const { toast } = useToast();
 
     useEffect(() => {
         setHeroSlides(settings?.hero_images || []);
     }, [settings]);
-
-    const handleFileChange = (index: number, file: File | null) => {
+    
+    const handleFileChange = async (index: number, file: File | null) => {
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const newSlides = [...heroSlides];
-            newSlides[index] = { ...newSlides[index], dataUrl: e.target?.result as string, imageUrl: e.target?.result as string };
-            setHeroSlides(newSlides);
+
+        const options = {
+            maxSizeMB: 1,
+            maxWidthOrHeight: 1920,
+            useWebWorker: true,
         };
-        reader.readAsDataURL(file);
+
+        try {
+            const compressedFile = await imageCompression(file, options);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const newSlides = [...heroSlides];
+                newSlides[index] = { ...newSlides[index], imageUrl: e.target?.result as string };
+                setHeroSlides(newSlides);
+            };
+            reader.readAsDataURL(compressedFile);
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error de Compresión", description: "No se pudo procesar la imagen.", variant: "destructive" });
+        }
     };
 
     const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -298,28 +312,25 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
         setIsSubmitting(true);
 
         const form = event.currentTarget;
-        const formData = new FormData(form);
-
-        const slidesData = heroSlides.map((slide, index) => {
-             const headline = formData.get(`heroHeadline_${index}`) as string;
-             const subheadline = formData.get(`heroSubheadline_${index}`) as string;
-             const buttonText = formData.get(`heroButtonText_${index}`) as string;
-             // Use the stored dataUrl or the existing imageUrl
-             const imageUrl = slide.dataUrl || slide.imageUrl;
-             return { id: slide.id, headline, subheadline, buttonText, imageUrl };
-        });
-
-        const finalFormData = new FormData();
-        finalFormData.append('heroImages', JSON.stringify(slidesData));
-
-        // Append all other form fields
-        for (const [key, value] of formData.entries()) {
-            if (!key.startsWith('hero')) {
-                 finalFormData.append(key, value);
+        const formData = new FormData();
+        
+        // Append all text fields
+        const formElements = form.elements as HTMLFormControlsCollection;
+        for (let i = 0; i < formElements.length; i++) {
+            const element = formElements[i] as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+            if (element.name && element.type !== 'file') {
+                if (element.type === 'checkbox') {
+                    formData.append(element.name, (element as HTMLInputElement).checked ? 'on' : 'off');
+                } else {
+                    formData.append(element.name, element.value);
+                }
             }
         }
         
-        const result = await updateStoreSettings(finalFormData);
+        // Append hero images as a JSON string
+        formData.append('heroImages', JSON.stringify(heroSlides));
+
+        const result = await updateStoreSettings(formData);
 
         if (result.success) {
             toast({ title: "Éxito", description: "La configuración se ha guardado." });
