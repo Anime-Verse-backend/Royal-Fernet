@@ -47,7 +47,7 @@ import {
     TabsTrigger,
 } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PlusCircle, Edit, Trash2, Search, FileText, Settings, XCircle, Github, Instagram, Facebook, Database, Store } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, FileText, Settings, XCircle, Github, Instagram, Facebook, Database, Store, GripVertical } from "lucide-react";
 import Image from "next/image";
 import Link from 'next/link';
 import { Product, Admin, StoreSettings, HeroSlide, StoreLocation } from "@/lib/definitions";
@@ -275,39 +275,88 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
 function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | null; onUpdate: () => void; }) {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const formRef = useRef<HTMLFormElement>(null);
+    const [slides, setSlides] = useState<Partial<HeroSlide>[]>([]);
+    
+    useEffect(() => {
+        const initialSlides = settings?.hero_images && settings.hero_images.length > 0 
+            ? settings.hero_images 
+            : [{ id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }];
+        setSlides(initialSlides);
+    }, [settings]);
 
+    const handleSlideChange = (index: number, field: keyof HeroSlide, value: string) => {
+        const newSlides = [...slides];
+        newSlides[index] = { ...newSlides[index], [field]: value };
+        setSlides(newSlides);
+    };
+
+    const addSlide = () => {
+        if (slides.length < 5) {
+            setSlides([...slides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
+        } else {
+            toast({ title: "Límite alcanzado", description: "No puedes añadir más de 5 diapositivas.", variant: "destructive" });
+        }
+    };
+    
+    const removeSlide = (index: number) => {
+        if (slides.length > 1) {
+            const newSlides = slides.filter((_, i) => i !== index);
+            setSlides(newSlides);
+        } else {
+            toast({ title: "Mínimo requerido", description: "Debe haber al menos una diapositiva.", variant: "destructive" });
+        }
+    };
+    
     const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setIsSubmitting(true);
         
         const formData = new FormData(event.currentTarget);
+        const slidesData = slides.map((slide, index) => {
+            return {
+                id: slide.id,
+                headline: formData.get(`heroHeadline_${index}`) as string,
+                subheadline: formData.get(`heroSubheadline_${index}`) as string,
+                buttonText: formData.get(`heroButtonText_${index}`) as string,
+                imageUrl: slide.imageUrl // Keep existing image URL
+            }
+        });
         
+        formData.append('heroImagesData', JSON.stringify(slidesData));
+
         const result = await updateStoreSettingsAction(formData);
 
         if (result.success) {
             toast({ title: "Éxito", description: "La configuración se ha guardado." });
-            onUpdate(); // Refresh data in parent
+            onUpdate();
         } else {
             toast({ title: "Error", description: result.error, variant: "destructive" });
         }
         setIsSubmitting(false);
     };
-    
-    const initialSlides = settings?.hero_images && settings.hero_images.length > 0 ? settings.hero_images : [{ id: 'new1', headline: '', subheadline: '', buttonText: '', imageUrl: '' }, { id: 'new2', headline: '', subheadline: '', buttonText: '', imageUrl: '' }];
 
     return (
-        <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-8" encType="multipart/form-data">
+        <form onSubmit={handleFormSubmit} className="space-y-8" encType="multipart/form-data">
             <Card>
-                <CardHeader>
-                    <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
-                    <CardDescription>Personaliza las diapositivas del carrusel principal.</CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
+                        <CardDescription>Personaliza las diapositivas del carrusel principal (máximo 5).</CardDescription>
+                    </div>
+                    <Button type="button" onClick={addSlide} disabled={slides.length >= 5}>
+                        <PlusCircle className="mr-2" />
+                        Añadir Diapositiva
+                    </Button>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                    {initialSlides.map((slide, index) => (
-                        <div key={slide.id || index} className="space-y-4 p-4 border rounded-lg">
-                            <h4 className="font-semibold">Diapositiva {index + 1}</h4>
-                            <input type="hidden" name={`heroImageId_${index}`} value={slide.id}/>
+                <CardContent className="space-y-4">
+                    {slides.map((slide, index) => (
+                        <div key={slide.id || index} className="space-y-4 p-4 border rounded-lg relative">
+                             <div className="flex justify-between items-center">
+                                <h4 className="font-semibold">Diapositiva {index + 1}</h4>
+                                <Button type="button" variant="ghost" size="icon" onClick={() => removeSlide(index)} disabled={slides.length <= 1}>
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                            </div>
                             <div className="grid gap-2">
                                 <Label>Título</Label>
                                 <Input name={`heroHeadline_${index}`} defaultValue={slide.headline} />
@@ -321,12 +370,12 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                                 <Input name={`heroButtonText_${index}`} defaultValue={slide.buttonText} />
                             </div>
                             <div className="grid gap-2">
-                                <Label>Imagen de Fondo (URL o Subir)</Label>
+                                <Label>Imagen de Fondo</Label>
                                 <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
                                 {slide.imageUrl && (
                                     <div className="mt-2">
                                         <p className="text-sm text-muted-foreground">Imagen actual:</p>
-                                        <img src={getSafeImageUrl(slide.imageUrl)} alt="preview" className="h-16 w-auto rounded-md object-cover mt-1" />
+                                        <Image src={getSafeImageUrl(slide.imageUrl)} alt="preview" width={128} height={72} className="h-16 w-auto rounded-md object-cover mt-1" />
                                     </div>
                                 )}
                             </div>
