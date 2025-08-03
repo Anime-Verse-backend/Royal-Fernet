@@ -23,7 +23,7 @@ const defaultSettings: StoreSettings = {
     headline: "Elegancia Atemporal, Redefinida.",
     subheadline: "Descubre nuestra colección exclusiva de relojes magistralmente elaborados.",
     buttonText: "Explorar Colección",
-    imageUrl: "https://placehold.co/1920x1080.png"
+    imageUrl: "https://images.pexels.com/photos/190819/pexels-photo-190819.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1"
   }],
   featured_collection_title: "Colección Destacada",
   featured_collection_description: "Relojes para quienes valoran la distinción.",

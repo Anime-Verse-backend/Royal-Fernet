@@ -67,7 +67,11 @@ export async function fetchStoreSettings(): Promise<StoreSettings | null> {
       console.error(`Error al obtener la configuración de la tienda: ${res.status} ${await res.text()}`);
       return null;
     }
-    return await res.json();
+    const settings = await res.json();
+    if (typeof settings.hero_images === 'string') {
+        settings.hero_images = JSON.parse(settings.hero_images);
+    }
+    return settings;
   } catch (error) {
     console.error('Error de red al obtener la configuración de la tienda:', error);
     return null;
@@ -156,5 +160,3 @@ export async function fetchTableContent(tableName: string): Promise<any[]> {
     return [];
   }
 }
-
-    
