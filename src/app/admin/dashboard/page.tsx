@@ -8,7 +8,7 @@
  * Incluye un generador de facturas y un panel para enviar notificaciones.
  */
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { fetchProducts, fetchAdmins, fetchStoreSettings, fetchDbTables, fetchTableContent, fetchStores } from "@/lib/data";
 import { Button } from "@/components/ui/button";
@@ -48,7 +48,7 @@ import {
     TabsTrigger,
 } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PlusCircle, Edit, Trash2, Search, FileText, BellRing, Settings, XCircle, Github, Instagram, Facebook, Database, Store } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, FileText, Settings, XCircle, Github, Instagram, Facebook, Database, Store } from "lucide-react";
 import Image from "next/image";
 import Link from 'next/link';
 import { Product, Admin, StoreSettings, HeroSlide, StoreLocation } from "@/lib/definitions";
@@ -276,23 +276,78 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
 function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | null; onUpdate: () => void; }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
-    const [heroSlides, setHeroSlides] = useState<(Partial<HeroSlide> & { file?: File })[]>([]);
-    const formRef = React.useRef<HTMLFormElement>(null);
+
+    // Helper function to convert a file to a Data URI
+    const toDataURL = (file: File): Promise<string> => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+
+    const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setIsSubmitting(true);
+
+        const form = event.currentTarget;
+        const formData = new FormData(form);
+        const finalFormData = new FormData();
+
+        // Transfer all regular fields
+        for (const [key, value] of formData.entries()) {
+            if (!(value instanceof File)) {
+                finalFormData.append(key, value);
+            }
+        }
+        
+        // Handle hero slides
+        const slideElements = form.querySelectorAll<HTMLDivElement>('[data-slide-index]');
+        const slidesData = await Promise.all(Array.from(slideElements).map(async (slideEl, index) => {
+            const headline = (slideEl.querySelector(`input[name="heroHeadline_${index}"]`) as HTMLInputElement)?.value;
+            const subheadline = (slideEl.querySelector(`textarea[name="heroSubheadline_${index}"]`) as HTMLTextAreaElement)?.value;
+            const buttonText = (slideEl.querySelector(`input[name="heroButtonText_${index}"]`) as HTMLInputElement)?.value;
+            const imageFile = (slideEl.querySelector(`input[name="heroImageFile_${index}"]`) as HTMLInputElement)?.files?.[0];
+            const existingImageUrl = (slideEl.querySelector(`input[name="existingImageUrl_${index}"]`) as HTMLInputElement)?.value;
+            
+            let imageUrl = existingImageUrl;
+            if (imageFile) {
+                try {
+                    imageUrl = await toDataURL(imageFile);
+                } catch (error) {
+                    console.error("Error converting file to Data URL", error);
+                    imageUrl = existingImageUrl; // Fallback to existing
+                }
+            }
+            
+            return {
+                id: slideEl.dataset.slideId || `new_${Date.now()}`,
+                headline,
+                subheadline,
+                buttonText,
+                imageUrl,
+            };
+        }));
+        
+        finalFormData.append('heroImages', JSON.stringify(slidesData));
+
+        const result = await updateStoreSettings(finalFormData);
+
+        if (result.success) {
+            toast({ title: "Éxito", description: "La configuración se ha guardado." });
+            onUpdate();
+        } else {
+            toast({ title: "Error", description: result.error, variant: "destructive" });
+        }
+
+        setIsSubmitting(false);
+    };
+
+    const [heroSlides, setHeroSlides] = useState<(Partial<HeroSlide> & { file?: File | null })[]>([]);
 
     useEffect(() => {
         setHeroSlides(settings?.hero_images || []);
     }, [settings]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const newSlides = [...heroSlides];
-            newSlides[index].file = file; // Store the file object
-            newSlides[index].imageUrl = URL.createObjectURL(file); // For local preview
-            setHeroSlides(newSlides);
-        }
-    };
-    
     const handleAddSlide = () => {
         setHeroSlides([...heroSlides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
     };
@@ -301,51 +356,8 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
         setHeroSlides(heroSlides.filter((_, i) => i !== index));
     };
 
-    const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        setIsSubmitting(true);
-
-        const form = event.currentTarget;
-        const formData = new FormData(form);
-
-        // This function converts a file to a Data URI
-        const toDataURL = (file: File): Promise<string> => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-
-        try {
-            // Process slides: convert new files to Data URIs
-            const processedSlides = await Promise.all(heroSlides.map(async (slide) => {
-                if (slide.file) {
-                    const dataUrl = await toDataURL(slide.file);
-                    return { ...slide, imageUrl: dataUrl, file: undefined };
-                }
-                return slide;
-            }));
-
-            // Append the processed slides as a JSON string
-            formData.append('heroImages', JSON.stringify(processedSlides));
-            
-            const result = await updateStoreSettings(formData);
-
-            if (result.success) {
-                toast({ title: "Éxito", description: "La configuración se ha guardado." });
-                onUpdate();
-            } else {
-                toast({ title: "Error", description: result.error, variant: "destructive" });
-            }
-        } catch (error: any) {
-            toast({ title: "Error de Formulario", description: error.message || `No se pudo procesar el formulario.`, variant: "destructive" });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
     return (
-        <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-8">
+        <form onSubmit={handleFormSubmit} className="space-y-8">
             <Card>
                 <CardHeader>
                     <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
@@ -353,20 +365,14 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {heroSlides.map((slide, index) => (
-                        <div key={slide.id || index} className="space-y-4 p-4 border rounded-lg relative">
-                             <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute top-2 right-2 text-destructive"
-                                onClick={() => handleRemoveSlide(index)}
-                            >
+                        <div key={slide.id || index} data-slide-index={index} data-slide-id={slide.id} className="space-y-4 p-4 border rounded-lg relative">
+                            <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive" onClick={() => handleRemoveSlide(index)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
                             <h4 className="font-semibold">Diapositiva {index + 1}</h4>
                             <div className="grid gap-2">
                                 <Label htmlFor={`heroHeadline_${index}`}>Título</Label>
-                                <Input name="featuredCollectionTitle" defaultValue={slide.headline} required />
+                                <Input name={`heroHeadline_${index}`} defaultValue={slide.headline} required />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor={`heroSubheadline_${index}`}>Subtítulo</Label>
@@ -378,8 +384,9 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                             </div>
                             <div className="grid gap-2">
                                 <Label>Imagen de Fondo</Label>
-                                <Input name={`heroImageFile_${index}`} type="file" accept="image/*" onChange={(e) => handleFileChange(e, index)} />
+                                <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
                                 {slide.imageUrl && <img src={slide.imageUrl} alt="preview" className="h-16 w-auto rounded-md object-cover mt-2" />}
+                                <input type="hidden" name={`existingImageUrl_${index}`} value={slide.imageUrl} />
                             </div>
                         </div>
                     ))}
@@ -389,7 +396,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                     </Button>
                 </CardContent>
             </Card>
-            
+
             <Card>
                 <CardHeader>
                     <CardTitle>Sección de Colección Destacada</CardTitle>
@@ -453,7 +460,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                     </div>
                 </CardContent>
             </Card>
-            <Card>
+             <Card>
                 <CardHeader>
                     <CardTitle>Notificaciones</CardTitle>
                     <CardDescription>Habilita o deshabilita las notificaciones emergentes en el sitio.</CardDescription>
@@ -572,9 +579,43 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
     const [customerName, setCustomerName] = useState('');
     const [selectedInvoiceProduct, setSelectedInvoiceProduct] = useState<string>('');
     const [selectedInvoiceQuantity, setSelectedInvoiceQuantity] = useState<number>(1);
-    
-    const notificationFormRef = React.useRef<HTMLFormElement>(null);
+    const [notificationsEnabled, setNotificationsEnabled] = useState(settings?.notifications_enabled ?? true);
+
+    const notificationFormRef = useRef<HTMLFormElement>(null);
     const { toast } = useToast();
+
+    const handleNotificationsToggle = async (enabled: boolean) => {
+        setNotificationsEnabled(enabled);
+        const formData = new FormData();
+        // Append all existing settings to preserve them
+        Object.entries(settings || {}).forEach(([key, value]) => {
+            if (key !== 'notifications_enabled' && value !== null && value !== undefined) {
+                const formKey = {
+                    'hero_images': 'heroImages',
+                    'featured_collection_title': 'featuredCollectionTitle',
+                    'featured_collection_description': 'featuredCollectionDescription',
+                    'promo_section_title': 'promoSectionTitle',
+                    'promo_section_description': 'promoSectionDescription',
+                    'promo_section_video_url': 'promoSectionVideoUrl',
+                    'contact_email': 'contactEmail',
+                    'twitter_url': 'twitterUrl',
+                    'instagram_url': 'instagramUrl',
+                    'facebook_url': 'facebookUrl'
+                }[key] || key;
+                formData.append(formKey, typeof value === 'object' ? JSON.stringify(value) : String(value));
+            }
+        });
+        formData.append('notificationsEnabled', enabled ? 'on' : 'off');
+        
+        const result = await updateStoreSettings(formData);
+        if (result.success) {
+            toast({ title: "Éxito", description: `Notificaciones ${enabled ? 'habilitadas' : 'deshabilitadas'}.` });
+            onSettingsChange();
+        } else {
+            toast({ title: "Error", description: result.error, variant: "destructive" });
+            setNotificationsEnabled(!enabled); // Revert on failure
+        }
+    };
 
     const handleAddInvoiceItem = () => {
         if (!selectedInvoiceProduct || selectedInvoiceQuantity < 1) {
@@ -675,10 +716,19 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
     return (
         <div className="grid gap-4 md:grid-cols-2">
             <Card>
-                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                    <div>
-                        <CardTitle className="text-sm font-medium">Notificaciones Globales</CardTitle>
-                        <CardDescription className="text-xs pt-1">Anuncia ofertas, lanzamientos y más.</CardDescription>
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                         <div>
+                            <CardTitle className="text-sm font-medium">Notificaciones Globales</CardTitle>
+                            <CardDescription className="text-xs pt-1">Anuncia ofertas, lanzamientos y más.</CardDescription>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                             <Switch
+                                checked={notificationsEnabled}
+                                onCheckedChange={handleNotificationsToggle}
+                             />
+                             <Label>{notificationsEnabled ? 'On' : 'Off'}</Label>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -699,11 +749,11 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
                             <Label htmlFor="link_url">URL del Enlace (Opcional)</Label>
                             <Input id="link_url" name="link_url" placeholder="https://your-store.com/sale" />
                         </div>
-                        <Button type="submit" disabled={isSendingNotification || !settings?.notifications_enabled} className="w-full">
+                        <Button type="submit" disabled={isSendingNotification || !notificationsEnabled} className="w-full">
                             {isSendingNotification ? 'Enviando...' : 'Enviar Notificación'}
                         </Button>
-                         {!(settings?.notifications_enabled ?? true) && (
-                            <p className="text-xs text-center text-muted-foreground">Las notificaciones están deshabilitadas. Actívalas para poder enviar.</p>
+                         {!notificationsEnabled && (
+                            <p className="text-xs text-center text-muted-foreground">Las notificaciones están deshabilitadas.</p>
                         )}
                     </form>
                 </CardContent>

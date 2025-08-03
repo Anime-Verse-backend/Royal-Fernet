@@ -152,16 +152,15 @@ export async function updateStoreSettings(formData: FormData): Promise<{success:
       });
 
       if (!res.ok) {
-        let errorText = await res.text();
+        const errorText = await res.text();
+        const errorMessage = `${res.status} ${res.statusText}: ${errorText}`;
+        console.error("Falló al actualizar la configuración de la tienda", errorMessage);
         try {
             const errorJson = JSON.parse(errorText);
-            // Include status code for better context
-            errorText = `${res.status} ${res.statusText}: ${errorJson.error || errorText}`;
+            return { success: false, error: `No se pudo actualizar la configuración: ${res.status} ${res.statusText}: ${errorJson.error || 'Unknown error'}` };
         } catch (e) {
-            errorText = `${res.status} ${res.statusText}: ${errorText}`;
+             return { success: false, error: `No se pudo actualizar la configuración: ${errorMessage}` };
         }
-        console.error("Falló al actualizar la configuración de la tienda", errorText);
-        return { success: false, error: `No se pudo actualizar la configuración: ${errorText}` };
       }
 
       revalidatePath('/admin/dashboard');

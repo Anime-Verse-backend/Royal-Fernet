@@ -277,10 +277,6 @@ def handle_settings():
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
-                # The frontend now sends Data URIs directly in the JSON payload for hero_images.
-                # No need to handle file uploads here anymore for settings.
-                
-                # Get the JSON string from the form data
                 hero_images_json = request.form.get('heroImages', '[]')
                 
                 sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url, notifications_enabled)
@@ -601,13 +597,3 @@ def get_table_content(table_name):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-
-    
-  
-
-    
-
-
-    
-
-    
