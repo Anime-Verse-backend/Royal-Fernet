@@ -492,10 +492,10 @@ def generate_invoice_docx():
                     "unit_price": discounted_price,
                     "subtotal": subtotal
                 })
-        conn.commit()
+        conn.commit() # Commit the transaction after all stock updates are calculated
 
     except (ValueError, psycopg2.Error) as e:
-        conn.rollback()
+        conn.rollback() # Rollback in case of any error during the loop
         app.logger.error(f"Error processing invoice transaction: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
