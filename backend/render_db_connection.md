@@ -1,6 +1,6 @@
 # Guía de Conexión de Base de Datos para Despliegue en Render
 
-Esta guía te ayudará a conectar tu backend de Python (Flask) a una base de datos externa (como Aiven, o una base de datos de Render) cuando lo despliegues como un "Web Service" en Render.
+Esta guía te ayudará a conectar tu backend de Python (Flask) a una base de datos externa cuando lo despliegues como un "Web Service" en Render.
 
 ## 1. Creación del Web Service en Render
 
@@ -10,7 +10,7 @@ Esta guía te ayudará a conectar tu backend de Python (Flask) a una base de dat
 
 ## 2. Configuración de Comandos (¡MUY IMPORTANTE!)
 
-En la configuración del servicio (`Settings` > `Build & Deploy`), asegúrate de establecer los siguientes comandos EXACTAMENTE como se muestra:
+En la configuración del servicio (`Settings` > `Build & Deploy`), asegúrate de establecer los siguientes comandos **EXACTAMENTE** como se muestra a continuación.
 
 - **Build Command (Comando de Construcción)**:
 
@@ -22,9 +22,9 @@ En la configuración del servicio (`Settings` > `Build & Deploy`), asegúrate de
 
 - **Start Command (Comando de Inicio)**:
   ```bash
-  gunicorn --worker-tmp-dir /dev/shm --config gunicorn.conf.py app:app
+  gunicorn --worker-tmp-dir /dev/shm app:app
   ```
-  _Este es el comando para iniciar el servidor de producción Gunicorn. Se ejecuta DESPUÉS del comando de construcción y ahora incluye el archivo de configuración para permitir subidas de archivos más grandes._
+  _Este es el comando que inicia tu servidor de producción Gunicorn y lo mantiene activo. Se ejecuta DESPUÉS del comando de construcción. Hemos eliminado la configuración de límite de petición de aquí porque ya no es necesaria con el nuevo método de subida de imágenes._
 
 ## 3. Configuración de Variables de Entorno
 
@@ -40,12 +40,5 @@ En la sección **"Environment"** de la configuración de tu servicio en Render, 
 ## 4. Despliegue Final
 
 Una vez que hayas configurado los comandos y las variables de entorno, haz clic en **"Save Changes"**. Render debería iniciar un nuevo despliegue. Si no lo hace, puedes forzarlo desde la pestaña **"Deploys"** haciendo clic en **"Deploy latest commit"**.
-
-Render seguirá los pasos en el orden correcto:
-
-1.  Clonará tu repositorio.
-2.  Instalará Python `3.11.9`.
-3.  Ejecutará `bash build.sh` (que instala dependencias y prepara la BD).
-4.  Ejecutará `gunicorn ...` para iniciar tu aplicación con la nueva configuración.
 
 ¡Y listo! Tu backend estará en línea, seguro y conectado.

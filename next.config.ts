@@ -50,11 +50,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'site-2206080.mozfiles.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'images.pexels.com',
+        hostname: 'images.unsplash.com',
       },
       {
         protocol: 'https',
@@ -62,26 +58,21 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'www.gravatar.com',
+        hostname: 'i.pinimg.com'
       },
       {
         protocol: 'https',
-        hostname: 'avatars.githubusercontent.com',
+        hostname: 'site-2206080.mozfiles.com',
       },
       {
         protocol: 'https',
-        hostname:'i.pinimg.com'
+        hostname: 'images.pexels.com',
       }
     ],
     // Permitir Data URIs
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-  },
-  experimental: {
-    serverActions: {
-        bodySizeLimit: '10mb',
-    },
   },
 };
 

@@ -73,6 +73,7 @@ import {
 } from "@/components/ui/avatar";
 import { formatCurrency, getSafeImageUrl } from '@/lib/utils';
 import { Switch } from "@/components/ui/switch";
+import { Separator } from '@/components/ui/separator';
 
 // Main page component
 export default function AdminDashboardPage() {
@@ -92,37 +93,29 @@ function DashboardContent() {
     const productQuery = searchParams.get('q') || '';
     const adminQuery = searchParams.get('admin_q') || '';
     
-    const refreshSettings = async () => {
-        const settingsData = await fetchStoreSettings();
-        setStoreSettings(settingsData);
+    const refreshData = async () => {
+        try {
+            const [productData, adminData, settingsData] = await Promise.all([
+                fetchProducts(productQuery),
+                fetchAdmins(adminQuery),
+                fetchStoreSettings()
+            ]);
+            setProducts(productData);
+            setAdmins(adminData);
+            setStoreSettings(settingsData);
+        } catch (error) {
+             toast({
+                title: "Error de Recarga",
+                description: "No se pudieron recargar los datos del panel.",
+                variant: 'destructive'
+            });
+        }
     };
 
     useEffect(() => {
-        async function loadData() {
-            setLoading(true);
-            try {
-                const [productData, adminData, settingsData] = await Promise.all([
-                    fetchProducts(productQuery),
-                    fetchAdmins(adminQuery),
-                    fetchStoreSettings()
-                ]);
-                setProducts(productData);
-                setAdmins(adminData);
-                setStoreSettings(settingsData);
-            } catch (error) {
-                console.error("Failed to load dashboard data:", error);
-                toast({
-                    title: "Error de Carga",
-                    description: "No se pudieron cargar los datos del panel. Asegúrate de que el backend esté funcionando.",
-                    variant: 'destructive'
-                });
-            } finally {
-                setLoading(false);
-                setProductCurrentPage(1);
-            }
-        }
-        loadData();
-    }, [productQuery, adminQuery, toast]);
+        setLoading(true);
+        refreshData().finally(() => setLoading(false));
+    }, [productQuery, adminQuery]);
     
     const handleSearch = (term: string, type: 'product' | 'admin') => {
         const params = new URLSearchParams(searchParams.toString());
@@ -154,7 +147,7 @@ function DashboardContent() {
                 </TabsList>
 
                 <TabsContent value="overview">
-                    <OverviewTab products={products} settings={storeSettings} onSettingsChange={refreshSettings} />
+                    <OverviewTab products={products} settings={storeSettings} onSettingsChange={refreshData} />
                 </TabsContent>
                 <TabsContent value="products">
                    <ProductsTab products={products} currentPage={productCurrentPage} setCurrentPage={setProductCurrentPage} onSearch={handleSearch} query={productQuery} />
@@ -286,7 +279,6 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
     const router = useRouter();
     const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>(settings?.hero_images || []);
     
-    // This function will convert file to data URI
     const fileToDataUri = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -300,38 +292,48 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
         event.preventDefault();
         setIsSubmitting(true);
         const form = event.currentTarget;
-        const formData = new FormData(form);
+        const baseFormData = new FormData(form);
+
+        const finalFormData = new FormData();
 
         const heroImagesData = [];
         for (let i = 0; i < heroSlides.length; i++) {
-            const imageFile = formData.get(`heroImageFile_${i}`) as File;
-            let imageUrl = formData.get(`heroImageUrl_${i}`) as string;
+            const imageFile = baseFormData.get(`heroImageFile_${i}`) as File;
+            let imageUrl = heroSlides[i].imageUrl || ''; // Start with existing or empty
 
             if (imageFile && imageFile.size > 0) {
-                imageUrl = await fileToDataUri(imageFile);
+                try {
+                    imageUrl = await fileToDataUri(imageFile);
+                } catch (error) {
+                    toast({ title: "Error de Archivo", description: `No se pudo procesar la imagen para el slide ${i+1}.`, variant: "destructive" });
+                    setIsSubmitting(false);
+                    return;
+                }
             }
-
+            
             heroImagesData.push({
-                id: heroSlides[i].id || `new_${Date.now()}`,
-                headline: formData.get(`heroHeadline_${i}`) as string,
-                subheadline: formData.get(`heroSubheadline_${i}`) as string,
-                buttonText: formData.get(`heroButtonText_${i}`) as string,
-                imageUrl: imageUrl || heroSlides[i].imageUrl, // Keep existing if no new one
+                id: heroSlides[i].id || `new_${Date.now()}_${i}`,
+                headline: baseFormData.get(`heroHeadline_${i}`) as string,
+                subheadline: baseFormData.get(`heroSubheadline_${i}`) as string,
+                buttonText: baseFormData.get(`heroButtonText_${i}`) as string,
+                imageUrl: imageUrl,
             });
         }
         
-        const finalFormData = new FormData();
         finalFormData.append('heroImages', JSON.stringify(heroImagesData));
-        finalFormData.append('featuredCollectionTitle', formData.get('featuredCollectionTitle') as string);
-        finalFormData.append('featuredCollectionDescription', formData.get('featuredCollectionDescription') as string);
-        finalFormData.append('promoSectionTitle', formData.get('promoSectionTitle') as string);
-        finalFormData.append('promoSectionDescription', formData.get('promoSectionDescription') as string);
-        finalFormData.append('promoSectionVideoUrl', formData.get('promoSectionVideoUrl') as string);
-        finalFormData.append('phone', formData.get('phone') as string);
-        finalFormData.append('contactEmail', formData.get('contactEmail') as string);
-        finalFormData.append('twitterUrl', formData.get('twitterUrl') as string);
-        finalFormData.append('instagramUrl', formData.get('instagramUrl') as string);
-        finalFormData.append('facebookUrl', formData.get('facebookUrl') as string);
+        finalFormData.append('featuredCollectionTitle', baseFormData.get('featuredCollectionTitle') as string);
+        finalFormData.append('featuredCollectionDescription', baseFormData.get('featuredCollectionDescription') as string);
+        finalFormData.append('promoSectionTitle', baseFormData.get('promoSectionTitle') as string);
+        finalFormData.append('promoSectionDescription', baseFormData.get('promoSectionDescription') as string);
+        finalFormData.append('promoSectionVideoUrl', baseFormData.get('promoSectionVideoUrl') as string);
+        finalFormData.append('phone', baseFormData.get('phone') as string);
+        finalFormData.append('contactEmail', baseFormData.get('contactEmail') as string);
+        finalFormData.append('twitterUrl', baseFormData.get('twitterUrl') as string);
+        finalFormData.append('instagramUrl', baseFormData.get('instagramUrl') as string);
+        finalFormData.append('facebookUrl', baseFormData.get('facebookUrl') as string);
+        // We handle notificationsEnabled separately
+        finalFormData.append('notificationsEnabled', settings?.notifications_enabled ? 'on' : 'off');
+
 
         const result = await updateStoreSettings(finalFormData);
 
@@ -393,18 +395,7 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                             </div>
                             <div className="grid gap-2">
                                 <Label>Imagen de Fondo</Label>
-                                <Tabs defaultValue={slide.imageUrl && !slide.imageUrl.startsWith('data:') ? 'url' : 'upload'} className="w-full">
-                                     <TabsList className="grid w-full grid-cols-2">
-                                        <TabsTrigger value="url">URL</TabsTrigger>
-                                        <TabsTrigger value="upload">Subir Archivo</TabsTrigger>
-                                    </TabsList>
-                                     <TabsContent value="url">
-                                        <Input name={`heroImageUrl_${index}`} placeholder="URL de la imagen" defaultValue={slide.imageUrl?.startsWith('data:') ? '' : slide.imageUrl} />
-                                    </TabsContent>
-                                    <TabsContent value="upload">
-                                        <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
-                                    </TabsContent>
-                                </Tabs>
+                                 <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
                                 {slide.imageUrl && <img src={slide.imageUrl} alt="preview" className="h-16 w-auto rounded-md object-cover mt-2" />}
                             </div>
                         </div>
@@ -664,7 +655,7 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
             toast({ title: "Éxito", description: "La factura se ha descargado." });
             setInvoiceItems([]);
             setCustomerName('');
-            // You might want to refresh products list here if stock changes are critical to show immediately
+            onSettingsChange(); // Refresh data to reflect stock changes
         } catch (error: any) {
             toast({ title: "Error de Factura", description: error.message, variant: 'destructive' });
         } finally {
@@ -689,15 +680,19 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
     
     const handleNotificationToggle = async (checked: boolean) => {
         const formData = new FormData();
-        // Append all existing settings to not lose them
-        Object.entries(settings || {}).forEach(([key, value]) => {
-            if (key === 'hero_images') {
-                formData.append(key, JSON.stringify(value));
-            } else if (value !== null && value !== undefined) {
-                 formData.append(key, String(value));
+        // This time we only need to send the single value that's changing.
+        formData.append('notificationsEnabled', checked ? 'on' : 'off');
+        // We must also send the existing data to not lose it
+        const currentSettings = await fetchStoreSettings() || {};
+        Object.entries(currentSettings).forEach(([key, value]) => {
+            if (key !== 'notifications_enabled') { // Exclude the one we are setting
+                 if (key === 'hero_images') {
+                    formData.append(key, JSON.stringify(value));
+                } else if (value !== null && value !== undefined) {
+                    formData.append(key, String(value));
+                }
             }
         });
-        formData.set('notificationsEnabled', checked ? 'on' : 'off');
         
         const result = await updateStoreSettings(formData);
          if (result.success) {
@@ -1293,3 +1288,4 @@ function StoreFormDialog({ isOpen, onClose, onSubmitSuccess, store }: { isOpen: 
 }
 
   
+

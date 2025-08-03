@@ -23,9 +23,6 @@ load_dotenv()
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# Set a larger request body limit (e.g., 16MB)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
-
 # --- CORS Configuration ---
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:9002')
 CORS(app, resources={r"/*": {"origins": [FRONTEND_URL, "http://localhost:9002"], "supports_credentials": True}})
@@ -277,28 +274,12 @@ def handle_settings():
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
+                # The frontend now sends Data URIs directly in the JSON payload for hero_images.
+                # No need to handle file uploads here anymore for settings.
+                
+                # Get the JSON string from the form data
                 hero_images_json = request.form.get('heroImages', '[]')
-                hero_images_data = json.loads(hero_images_json)
-                processed_hero_images = []
-
-                for index, slide in enumerate(hero_images_data):
-                    if not isinstance(slide, dict):
-                        continue
-
-                    # Create a mutable copy of the slide data
-                    processed_slide = slide.copy()
-                    
-                    # Check for a new file upload for the current slide
-                    file_key = f'heroImageFile_{index}'
-                    if file_key in request.files and request.files[file_key].filename:
-                        file = request.files[file_key]
-                        data_uri = file_to_data_uri(file)
-                        if data_uri:
-                            # If a new file is uploaded, it overrides any existing URL
-                            processed_slide['imageUrl'] = data_uri
-                    
-                    processed_hero_images.append(processed_slide)
-
+                
                 sql = """INSERT INTO settings (id, hero_images, featured_collection_title, featured_collection_description, promo_section_title, promo_section_description, promo_section_video_url, phone, contact_email, twitter_url, instagram_url, facebook_url, notifications_enabled)
                          VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                          ON CONFLICT (id) DO UPDATE SET
@@ -316,9 +297,17 @@ def handle_settings():
                          notifications_enabled = EXCLUDED.notifications_enabled
                          RETURNING *"""
                 values = (
-                    json.dumps(processed_hero_images), request.form.get('featuredCollectionTitle'), request.form.get('featuredCollectionDescription'),
-                    request.form.get('promoSectionTitle'), request.form.get('promoSectionDescription'), request.form.get('promoSectionVideoUrl'),
-                    request.form.get('phone'), request.form.get('contactEmail'), request.form.get('twitterUrl'), request.form.get('instagramUrl'), request.form.get('facebookUrl'),
+                    hero_images_json,
+                    request.form.get('featuredCollectionTitle'),
+                    request.form.get('featuredCollectionDescription'),
+                    request.form.get('promoSectionTitle'),
+                    request.form.get('promoSectionDescription'),
+                    request.form.get('promoSectionVideoUrl'),
+                    request.form.get('phone'),
+                    request.form.get('contactEmail'),
+                    request.form.get('twitterUrl'),
+                    request.form.get('instagramUrl'),
+                    request.form.get('facebookUrl'),
                     request.form.get('notificationsEnabled') == 'on'
                 )
                 cursor.execute(sql, values)
@@ -331,7 +320,8 @@ def handle_settings():
             settings = cursor.fetchone()
             if settings:
                 return jsonify(dict(settings))
-            return jsonify({}), 404
+            # Return default empty object if no settings found, client will handle it
+            return jsonify({}), 200
     except Exception as e:
         app.logger.error(f"Error in handle_settings: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
