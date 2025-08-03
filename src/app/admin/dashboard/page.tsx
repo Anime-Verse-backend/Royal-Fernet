@@ -282,6 +282,7 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
     const { toast } = useToast();
     const router = useRouter();
     const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>(settings?.hero_images || []);
+    const formRef = React.useRef<HTMLFormElement>(null);
 
     const handleAddSlide = () => {
         setHeroSlides([...heroSlides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
@@ -295,17 +296,31 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
         event.preventDefault();
         setIsSubmitting(true);
         
-        const formData = new FormData(event.currentTarget);
-        const finalSlides = heroSlides.map((slide, index) => ({
-            id: slide.id?.startsWith('new_') ? `slide_${Date.now()}_${index}` : slide.id,
-            headline: formData.get(`heroHeadline_${index}`) as string,
-            subheadline: formData.get(`heroSubheadline_${index}`) as string,
-            buttonText: formData.get(`heroButtonText_${index}`) as string,
-            imageUrl: formData.get(`heroImageUrl_${index}`) as string,
-        }));
+        const currentForm = formRef.current;
+        if (!currentForm) {
+            setIsSubmitting(false);
+            return;
+        }
 
-        formData.set('heroImages', JSON.stringify(finalSlides));
+        const formData = new FormData(currentForm);
+        
+        const finalSlidesData = heroSlides.map((slide, index) => {
+            const headline = formData.get(`heroHeadline_${index}`) as string;
+            const subheadline = formData.get(`heroSubheadline_${index}`) as string;
+            const buttonText = formData.get(`heroButtonText_${index}`) as string;
+            const imageUrl = formData.get(`heroImageUrl_${index}`) as string;
+            
+            return {
+                id: slide.id?.startsWith('new_') ? `slide_${Date.now()}_${index}` : slide.id,
+                headline,
+                subheadline,
+                buttonText,
+                imageUrl,
+            };
+        });
 
+        formData.set('heroImages', JSON.stringify(finalSlidesData));
+        
         const result = await updateStoreSettings(formData);
 
         if (result.success) {
@@ -326,7 +341,7 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
     };
     
     return (
-        <form onSubmit={handleSubmit} className="space-y-6" encType="multipart/form-data">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-6" encType="multipart/form-data">
             <Card>
                 <CardHeader>
                     <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
@@ -1230,5 +1245,7 @@ function StoreFormDialog({ isOpen, onClose, onSubmitSuccess, store }: { isOpen: 
     );
 }
 
+
+    
 
     

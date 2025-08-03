@@ -269,7 +269,8 @@ def handle_admin(admin_id):
 @app.route('/api/settings', methods=['GET', 'POST'])
 def handle_settings():
     conn = get_db_connection()
-    if not conn: return jsonify({'error': 'Database connection failed'}), 500
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
@@ -278,15 +279,19 @@ def handle_settings():
                 processed_hero_images = []
 
                 for index, slide in enumerate(hero_images_data):
-                    if not isinstance(slide, dict): continue
+                    if not isinstance(slide, dict):
+                        continue
 
+                    # Create a mutable copy of the slide data
                     processed_slide = slide.copy()
-
+                    
+                    # Check for a new file upload for the current slide
                     file_key = f'heroImageFile_{index}'
                     if file_key in request.files and request.files[file_key].filename:
                         file = request.files[file_key]
                         data_uri = file_to_data_uri(file)
                         if data_uri:
+                            # If a new file is uploaded, it overrides any existing URL
                             processed_slide['imageUrl'] = data_uri
                     
                     processed_hero_images.append(processed_slide)
