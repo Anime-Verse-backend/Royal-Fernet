@@ -275,15 +275,23 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
 
 function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | null; onUpdate: () => void; }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [heroSlides, setHeroSlides] = useState<(Partial<HeroSlide> & { file?: File | null, dataUrl?: string | null })[]>([]);
     const { toast } = useToast();
 
-    // Helper function to convert a file to a Data URI
-    const toDataURL = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    useEffect(() => {
+        setHeroSlides(settings?.hero_images || []);
+    }, [settings]);
+
+    const handleFileChange = (index: number, file: File | null) => {
+        if (!file) return;
         const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
+        reader.onload = (e) => {
+            const newSlides = [...heroSlides];
+            newSlides[index] = { ...newSlides[index], dataUrl: e.target?.result as string, imageUrl: e.target?.result as string };
+            setHeroSlides(newSlides);
+        };
         reader.readAsDataURL(file);
-    });
+    };
 
     const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -291,45 +299,26 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
 
         const form = event.currentTarget;
         const formData = new FormData(form);
-        const finalFormData = new FormData();
 
-        // Transfer all regular fields
+        const slidesData = heroSlides.map((slide, index) => {
+             const headline = formData.get(`heroHeadline_${index}`) as string;
+             const subheadline = formData.get(`heroSubheadline_${index}`) as string;
+             const buttonText = formData.get(`heroButtonText_${index}`) as string;
+             // Use the stored dataUrl or the existing imageUrl
+             const imageUrl = slide.dataUrl || slide.imageUrl;
+             return { id: slide.id, headline, subheadline, buttonText, imageUrl };
+        });
+
+        const finalFormData = new FormData();
+        finalFormData.append('heroImages', JSON.stringify(slidesData));
+
+        // Append all other form fields
         for (const [key, value] of formData.entries()) {
-            if (!(value instanceof File)) {
-                finalFormData.append(key, value);
+            if (!key.startsWith('hero')) {
+                 finalFormData.append(key, value);
             }
         }
         
-        // Handle hero slides
-        const slideElements = form.querySelectorAll<HTMLDivElement>('[data-slide-index]');
-        const slidesData = await Promise.all(Array.from(slideElements).map(async (slideEl, index) => {
-            const headline = (slideEl.querySelector(`input[name="heroHeadline_${index}"]`) as HTMLInputElement)?.value;
-            const subheadline = (slideEl.querySelector(`textarea[name="heroSubheadline_${index}"]`) as HTMLTextAreaElement)?.value;
-            const buttonText = (slideEl.querySelector(`input[name="heroButtonText_${index}"]`) as HTMLInputElement)?.value;
-            const imageFile = (slideEl.querySelector(`input[name="heroImageFile_${index}"]`) as HTMLInputElement)?.files?.[0];
-            const existingImageUrl = (slideEl.querySelector(`input[name="existingImageUrl_${index}"]`) as HTMLInputElement)?.value;
-            
-            let imageUrl = existingImageUrl;
-            if (imageFile) {
-                try {
-                    imageUrl = await toDataURL(imageFile);
-                } catch (error) {
-                    console.error("Error converting file to Data URL", error);
-                    imageUrl = existingImageUrl; // Fallback to existing
-                }
-            }
-            
-            return {
-                id: slideEl.dataset.slideId || `new_${Date.now()}`,
-                headline,
-                subheadline,
-                buttonText,
-                imageUrl,
-            };
-        }));
-        
-        finalFormData.append('heroImages', JSON.stringify(slidesData));
-
         const result = await updateStoreSettings(finalFormData);
 
         if (result.success) {
@@ -341,13 +330,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
 
         setIsSubmitting(false);
     };
-
-    const [heroSlides, setHeroSlides] = useState<(Partial<HeroSlide> & { file?: File | null })[]>([]);
-
-    useEffect(() => {
-        setHeroSlides(settings?.hero_images || []);
-    }, [settings]);
-
+    
     const handleAddSlide = () => {
         setHeroSlides([...heroSlides, { id: `new_${Date.now()}`, headline: '', subheadline: '', buttonText: '', imageUrl: '' }]);
     };
@@ -365,7 +348,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {heroSlides.map((slide, index) => (
-                        <div key={slide.id || index} data-slide-index={index} data-slide-id={slide.id} className="space-y-4 p-4 border rounded-lg relative">
+                        <div key={slide.id || index} className="space-y-4 p-4 border rounded-lg relative">
                             <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive" onClick={() => handleRemoveSlide(index)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
@@ -384,9 +367,13 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                             </div>
                             <div className="grid gap-2">
                                 <Label>Imagen de Fondo</Label>
-                                <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
+                                <Input 
+                                  name={`heroImageFile_${index}`} 
+                                  type="file" 
+                                  accept="image/*" 
+                                  onChange={(e) => handleFileChange(index, e.target.files?.[0] || null)}
+                                />
                                 {slide.imageUrl && <img src={slide.imageUrl} alt="preview" className="h-16 w-auto rounded-md object-cover mt-2" />}
-                                <input type="hidden" name={`existingImageUrl_${index}`} value={slide.imageUrl} />
                             </div>
                         </div>
                     ))}
