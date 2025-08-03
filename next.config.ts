@@ -72,10 +72,6 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'encrypted-tbn2.gstatic.com',
       },
-      {
-        protocol: 'https',
-        hostname: 'i.pinimg.com'
-      },
       {protocol: 'https',
        hostname: 'cdn.pixabay.com'
       },
