@@ -93,7 +93,7 @@ function DashboardContent() {
     const productQuery = searchParams.get('q') || '';
     const adminQuery = searchParams.get('admin_q') || '';
     
-    const refreshData = async () => {
+    const refreshData = React.useCallback(async () => {
         try {
             const [productData, adminData, settingsData] = await Promise.all([
                 fetchProducts(productQuery),
@@ -110,12 +110,12 @@ function DashboardContent() {
                 variant: 'destructive'
             });
         }
-    };
+    }, [productQuery, adminQuery, toast]);
 
     useEffect(() => {
         setLoading(true);
         refreshData().finally(() => setLoading(false));
-    }, [productQuery, adminQuery]);
+    }, [refreshData]);
     
     const handleSearch = (term: string, type: 'product' | 'admin') => {
         const params = new URLSearchParams(searchParams.toString());
@@ -276,15 +276,25 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
 function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | null; onUpdate: () => void; }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
-    const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>(settings?.hero_images || []);
-    
-    const fileToDataUri = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
+    // Local state for hero slides to manage additions/removals and file previews
+    const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>([]);
+
+    useEffect(() => {
+        // Initialize local state when settings data is available
+        setHeroSlides(settings?.hero_images || []);
+    }, [settings]);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+        const file = e.target.files?.[0];
+        if (file) {
             const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
+            reader.onloadend = () => {
+                const newSlides = [...heroSlides];
+                newSlides[index].imageUrl = reader.result as string; // Preview as Data URI
+                setHeroSlides(newSlides);
+            };
             reader.readAsDataURL(file);
-        });
+        }
     };
 
     const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -294,39 +304,22 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
         const form = event.currentTarget;
         const baseFormData = new FormData(form);
         const finalFormData = new FormData();
-
+        
+        // This is the correct way to get all other text fields
+        for (const [key, value] of baseFormData.entries()) {
+             if (!key.startsWith('heroImageFile_')) {
+                finalFormData.append(key, value);
+             }
+        }
+        
+        const heroImagesData = heroSlides.map((slide) => ({
+            ...slide,
+            id: slide.id || `new_${Date.now()}`
+        }));
+        
+        finalFormData.append('heroImages', JSON.stringify(heroImagesData));
+        
         try {
-            const heroImagesData = await Promise.all(heroSlides.map(async (slide, i) => {
-                const imageFile = baseFormData.get(`heroImageFile_${i}`) as File;
-                let imageUrl = slide.imageUrl || ''; 
-
-                if (imageFile && imageFile.size > 0) {
-                    imageUrl = await fileToDataUri(imageFile);
-                }
-                
-                return {
-                    id: slide.id || `new_${Date.now()}_${i}`,
-                    headline: baseFormData.get(`heroHeadline_${i}`) as string,
-                    subheadline: baseFormData.get(`heroSubheadline_${i}`) as string,
-                    buttonText: baseFormData.get(`heroButtonText_${i}`) as string,
-                    imageUrl: imageUrl,
-                };
-            }));
-            
-            finalFormData.append('heroImages', JSON.stringify(heroImagesData));
-            
-            const otherFields = [
-                'featuredCollectionTitle', 'featuredCollectionDescription', 'promoSectionTitle', 
-                'promoSectionDescription', 'promoSectionVideoUrl', 'phone', 'contactEmail', 
-                'twitterUrl', 'instagramUrl', 'facebookUrl', 'notificationsEnabled'
-            ];
-            otherFields.forEach(field => {
-                const value = baseFormData.get(field);
-                if (value !== null) {
-                    finalFormData.append(field, value);
-                }
-            });
-
             const result = await updateStoreSettings(finalFormData);
 
             if (result.success) {
@@ -336,7 +329,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                 toast({ title: "Error", description: result.error, variant: "destructive" });
             }
         } catch (error) {
-            toast({ title: "Error de Archivo", description: `No se pudo procesar una de las imágenes.`, variant: "destructive" });
+            toast({ title: "Error de Formulario", description: `No se pudo procesar el formulario.`, variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }
@@ -349,7 +342,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
     const handleRemoveSlide = (index: number) => {
         setHeroSlides(heroSlides.filter((_, i) => i !== index));
     };
-    
+
     return (
         <form onSubmit={handleFormSubmit} className="space-y-8">
             <Card>
@@ -384,7 +377,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                             </div>
                             <div className="grid gap-2">
                                 <Label>Imagen de Fondo</Label>
-                                 <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
+                                <Input name={`heroImageFile_${index}`} type="file" accept="image/*" onChange={(e) => handleFileChange(e, index)} />
                                 {slide.imageUrl && <img src={slide.imageUrl} alt="preview" className="h-16 w-auto rounded-md object-cover mt-2" />}
                             </div>
                         </div>
@@ -666,21 +659,6 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
         const formData = new FormData();
         formData.append('notificationsEnabled', checked ? 'on' : 'off');
         
-        // Populate the rest of the form data to prevent losing existing settings
-        if (settings) {
-            Object.entries(settings).forEach(([key, value]) => {
-                const keyAs = key as keyof StoreSettings;
-                if (keyAs !== 'notifications_enabled') {
-                    if (keyAs === 'hero_images' && value) {
-                        formData.append(key, JSON.stringify(value));
-                    } else if (value !== null && value !== undefined) {
-                        const formKey = Object.keys(defaultSettingsMap).find(k => defaultSettingsMap[k] === key) || key
-                        formData.append(formKey, String(value));
-                    }
-                }
-            });
-        }
-        
         const result = await updateStoreSettings(formData);
         if (result.success) {
             toast({
@@ -696,20 +674,6 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
             });
         }
     };
-    
-    const defaultSettingsMap: { [key: string]: string } = {
-        'featuredCollectionTitle': 'featured_collection_title',
-        'featuredCollectionDescription': 'featured_collection_description',
-        'promoSectionTitle': 'promo_section_title',
-        'promoSectionDescription': 'promo_section_description',
-        'promoSectionVideoUrl': 'promo_section_video_url',
-        'phone': 'phone',
-        'contactEmail': 'contact_email',
-        'twitterUrl': 'twitter_url',
-        'instagramUrl': 'instagram_url',
-        'facebookUrl': 'facebook_url',
-    };
-    
 
     return (
         <div className="grid gap-4 md:grid-cols-2">
@@ -724,7 +688,7 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
                             <Switch 
                                 id="notificationsEnabledToggle" 
                                 name="notificationsEnabled"
-                                checked={settings?.notifications_enabled}
+                                checked={settings?.notifications_enabled ?? true}
                                 onCheckedChange={handleNotificationToggle}
                                 />
                             <Label htmlFor="notificationsEnabledToggle">Habilitadas</Label>
@@ -752,7 +716,7 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
                         <Button type="submit" disabled={isSendingNotification || !settings?.notifications_enabled} className="w-full">
                             {isSendingNotification ? 'Enviando...' : 'Enviar Notificación'}
                         </Button>
-                         {!settings?.notifications_enabled && (
+                         {!(settings?.notifications_enabled ?? true) && (
                             <p className="text-xs text-center text-muted-foreground">Las notificaciones están deshabilitadas. Actívalas para poder enviar.</p>
                         )}
                     </form>
@@ -1095,23 +1059,21 @@ function DevelopersTab() {
                     <CardDescription>Conoce a las personas detrás de la magia.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
-                    <Card className="flex flex-col items-center p-8 text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
-                  <Avatar className="h-32 w-32 mb-6">
-                      <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
-                      <AvatarFallback>JD</AvatarFallback>
-                  </Avatar>
-                  
-                  <h1 className="text-2xl font-semibold">Luis Miguel Fonce</h1>
-                  
-                  <p className="text-primary/80">Lead Full-Stack Developer</p>
-                  <p className="mt-4 text-sm text-muted-foreground flex-grow">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
-                  <div className="flex gap-4 mt-6">
-                      <Link href="https://api.whatsapp.com/send/?phone=573044065668&text=%C2%A1Hola,+Me+interesa+tu+trabajo+amigo" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-6 w-6" /></Link>
-                      <Link href="https://www.instagram.com/miguel_1068l/" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-6 w-6" /></Link>
-                      <Link href="https://www.facebook.com/luismiguel.fonceguaitero?locale=es_LA" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-6 w-6" /></Link>
-                      <Link href="https://github.com/MIGUEL6-BNX" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-6 w-6" /></Link>
-                  </div>
-              </Card>
+                    <Card className="flex flex-col items-center p-6 text-center">
+                        <Avatar className="h-24 w-24 mb-4">
+                            <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
+                            <AvatarFallback>lM</AvatarFallback>
+                        </Avatar>
+                        <h3 className="text-lg font-semibold">LUIS MIGUEL FONCE</h3>
+                        <p className="text-muted-foreground">Lead Full-Stack Developer</p>
+                        <p className="mt-2 text-sm text-center">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
+                        <div className="flex gap-4 mt-4">
+                            <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
+                        </div>
+                    </Card>
                 </CardContent>
             </Card>
             <Card>
@@ -1291,7 +1253,3 @@ function StoreFormDialog({ isOpen, onClose, onSubmitSuccess, store }: { isOpen: 
         </Dialog>
     );
 }
-
-  
-
-    

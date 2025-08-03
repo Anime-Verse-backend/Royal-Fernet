@@ -155,9 +155,10 @@ export async function updateStoreSettings(formData: FormData): Promise<{success:
         let errorText = await res.text();
         try {
             const errorJson = JSON.parse(errorText);
-            errorText = errorJson.error || errorText;
+            // Include status code for better context
+            errorText = `${res.status} ${res.statusText}: ${errorJson.error || errorText}`;
         } catch (e) {
-            // Not a JSON error, use the raw text
+            errorText = `${res.status} ${res.statusText}: ${errorText}`;
         }
         console.error("Falló al actualizar la configuración de la tienda", errorText);
         return { success: false, error: `No se pudo actualizar la configuración: ${errorText}` };
@@ -166,7 +167,7 @@ export async function updateStoreSettings(formData: FormData): Promise<{success:
       revalidatePath('/admin/dashboard');
       revalidatePath('/');
       return { success: true };
-  } catch (error) {
+  } catch (error: any) {
       console.error("Error de red al actualizar la configuración:", error);
       return { success: false, error: 'Ocurrió un error de red. Asegúrate de que el backend esté funcionando.' };
   }
@@ -210,7 +211,3 @@ export async function sendNotificationAction(formData: FormData): Promise<{succe
     return { success: false, error: 'Ocurrió un error de red al enviar la notificación.' };
   }
 }
-
-    
-
-    
