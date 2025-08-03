@@ -1,4 +1,3 @@
-
 'use client';
 /**
  * @fileoverview Página del panel de control de administración.
@@ -56,7 +55,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { addProduct, updateProduct, deleteProduct, addAdmin, sendNotificationAction, updateStoreSettings, deleteAdmin } from "@/lib/actions";
+import { addProduct, updateProduct, deleteProduct, addAdmin, sendNotificationAction, updateStoreSettings as updateStoreSettingsAction, deleteAdmin } from "@/lib/actions";
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -276,12 +275,15 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
 function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | null; onUpdate: () => void; }) {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const formRef = useRef<HTMLFormElement>(null);
 
     const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setIsSubmitting(true);
+        
         const formData = new FormData(event.currentTarget);
-        const result = await updateStoreSettings(formData);
+        
+        const result = await updateStoreSettingsAction(formData);
 
         if (result.success) {
             toast({ title: "Éxito", description: "La configuración se ha guardado." });
@@ -291,33 +293,35 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
         }
         setIsSubmitting(false);
     };
+    
+    const initialSlides = settings?.hero_images && settings.hero_images.length > 0 ? settings.hero_images : [{ id: 'new1', headline: '', subheadline: '', buttonText: '', imageUrl: '' }, { id: 'new2', headline: '', subheadline: '', buttonText: '', imageUrl: '' }];
 
     return (
-        <form onSubmit={handleFormSubmit} className="space-y-8" encType="multipart/form-data">
+        <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-8" encType="multipart/form-data">
             <Card>
                 <CardHeader>
                     <CardTitle>Sección de Bienvenida (Carrusel Héroe)</CardTitle>
                     <CardDescription>Personaliza las diapositivas del carrusel principal.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    {(settings?.hero_images || [{}, {}]).map((slide, index) => (
+                    {initialSlides.map((slide, index) => (
                         <div key={slide.id || index} className="space-y-4 p-4 border rounded-lg">
                             <h4 className="font-semibold">Diapositiva {index + 1}</h4>
-                            <input type="hidden" name={`heroImageId_${index}`} defaultValue={slide.id}/>
+                            <input type="hidden" name={`heroImageId_${index}`} value={slide.id}/>
                             <div className="grid gap-2">
                                 <Label>Título</Label>
-                                <Input name={`heroHeadline_${index}`} defaultValue={slide.headline} required />
+                                <Input name={`heroHeadline_${index}`} defaultValue={slide.headline} />
                             </div>
                             <div className="grid gap-2">
                                 <Label>Subtítulo</Label>
-                                <Textarea name={`heroSubheadline_${index}`} defaultValue={slide.subheadline} required />
+                                <Textarea name={`heroSubheadline_${index}`} defaultValue={slide.subheadline} />
                             </div>
                             <div className="grid gap-2">
                                 <Label>Texto del Botón</Label>
-                                <Input name={`heroButtonText_${index}`} defaultValue={slide.buttonText} required />
+                                <Input name={`heroButtonText_${index}`} defaultValue={slide.buttonText} />
                             </div>
                             <div className="grid gap-2">
-                                <Label>Imagen de Fondo</Label>
+                                <Label>Imagen de Fondo (URL o Subir)</Label>
                                 <Input name={`heroImageFile_${index}`} type="file" accept="image/*" />
                                 {slide.imageUrl && (
                                     <div className="mt-2">
@@ -338,7 +342,7 @@ function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | n
                 <CardContent className="space-y-4">
                     <div className="grid gap-2">
                         <Label htmlFor="featuredCollectionTitle">Título</Label>
-                        <Input name="featuredCollectionTitle" defaultValue={settings?.featured_collection_title} required />
+                        <Input name="featuredCollectionTitle" defaultValue={settings?.featured_collection_title} />
                     </div>
                      <div className="grid gap-2">
                         <Label htmlFor="featuredCollectionDescription">Descripción</Label>
@@ -521,11 +525,10 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
     const handleNotificationsToggle = async (enabled: boolean) => {
         setNotificationsEnabled(enabled);
         const formData = new FormData();
-        // Append all existing settings to preserve them
         Object.entries(settings || {}).forEach(([key, value]) => {
             if (key !== 'notifications_enabled' && value !== null && value !== undefined) {
-                const formKey = {
-                    'hero_images': 'heroImages',
+                 const formKey = {
+                    'hero_images': 'heroImagesData',
                     'featured_collection_title': 'featuredCollectionTitle',
                     'featured_collection_description': 'featuredCollectionDescription',
                     'promo_section_title': 'promoSectionTitle',
@@ -541,7 +544,7 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
         });
         formData.append('notificationsEnabled', enabled ? 'on' : 'off');
         
-        const result = await updateStoreSettings(formData);
+        const result = await updateStoreSettingsAction(formData);
         if (result.success) {
             toast({ title: "Éxito", description: `Notificaciones ${enabled ? 'habilitadas' : 'deshabilitadas'}.` });
             onSettingsChange();
@@ -1029,12 +1032,12 @@ function DevelopersTab() {
                     <CardDescription>Conoce a las personas detrás de la magia.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
-                     <Card className="flex flex-col items-center p-6 text-center">
+                    <Card className="flex flex-col items-center p-6 text-center">
                         <Avatar className="h-24 w-24 mb-4">
-                            <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
+                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 1" />
                             <AvatarFallback>JD</AvatarFallback>
                         </Avatar>
-                        <h3 className="text-lg font-semibold">Luis Miguel Fonce</h3>
+                        <h3 className="text-lg font-semibold">Juan Developer</h3>
                         <p className="text-muted-foreground">Lead Full-Stack Developer</p>
                         <p className="mt-2 text-sm text-center">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
                         <div className="flex gap-4 mt-4">
@@ -1044,8 +1047,21 @@ function DevelopersTab() {
                             <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
                         </div>
                     </Card>
-                    
-                    
+                    <Card className="flex flex-col items-center p-6 text-center">
+                        <Avatar className="h-24 w-24 mb-4">
+                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 2" />
+                            <AvatarFallback>AI</AvatarFallback>
+                        </Avatar>
+                        <h3 className="text-lg font-semibold">Ana Interfaz</h3>
+                        <p className="text-muted-foreground">UI/UX Designer</p>
+                        <p className="mt-2 text-sm text-center">Diseñando interfaces intuitivas y estéticamente agradables que mejoran la interacción del usuario.</p>
+                            <div className="flex gap-4 mt-4">
+                            <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
+                        </div>
+                    </Card>
                 </CardContent>
             </Card>
             <Card>
@@ -1075,16 +1091,21 @@ function StoresTab() {
 
     const { toast } = useToast();
 
-    const loadStores = async () => {
+    const loadStores = React.useCallback(async () => {
         setLoading(true);
-        const storesData = await fetchStores();
-        setStores(storesData);
-        setLoading(false);
-    };
+        try {
+            const storesData = await fetchStores();
+            setStores(storesData);
+        } catch (error) {
+            toast({ title: "Error", description: "No se pudieron cargar las tiendas.", variant: "destructive" });
+        } finally {
+            setLoading(false);
+        }
+    }, [toast]);
 
     useEffect(() => {
         loadStores();
-    }, []);
+    }, [loadStores]);
 
     const handleOpenDialog = (store: StoreLocation | null = null) => {
         setEditingStore(store);
