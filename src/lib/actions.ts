@@ -152,7 +152,13 @@ export async function updateStoreSettings(formData: FormData): Promise<{success:
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
+        let errorText = await res.text();
+        try {
+            const errorJson = JSON.parse(errorText);
+            errorText = errorJson.error || errorText;
+        } catch (e) {
+            // Not a JSON error, use the raw text
+        }
         console.error("Falló al actualizar la configuración de la tienda", errorText);
         return { success: false, error: `No se pudo actualizar la configuración: ${errorText}` };
       }
@@ -204,5 +210,7 @@ export async function sendNotificationAction(formData: FormData): Promise<{succe
     return { success: false, error: 'Ocurrió un error de red al enviar la notificación.' };
   }
 }
+
+    
 
     

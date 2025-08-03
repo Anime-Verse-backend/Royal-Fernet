@@ -15,6 +15,11 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    serverActions: {
+        bodySizeLimit: '10mb',
+    },
+  },
   async rewrites() {
     const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
     if (!backendUrl) {
@@ -56,7 +61,7 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'images.pexels.com',
       },
-      {
+       {
         protocol: 'https',
         hostname: 'i.pinimg.com',
       }
@@ -70,4 +75,5 @@ const nextConfig: NextConfig = {
 
 export default nextConfig;
 
+    
     

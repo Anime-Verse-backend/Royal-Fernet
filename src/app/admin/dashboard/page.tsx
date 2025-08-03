@@ -159,7 +159,7 @@ function DashboardContent() {
                    <AdminsTab admins={admins} onSearch={handleSearch} query={adminQuery}/>
                 </TabsContent>
                 <TabsContent value="settings">
-                    <SettingsTab settings={storeSettings} />
+                    <SettingsTab settings={storeSettings} onUpdate={refreshData} />
                 </TabsContent>
                 <TabsContent value="database">
                     <DatabaseViewer />
@@ -273,10 +273,9 @@ function AdminForm({ onFormSubmit }: { onFormSubmit: () => void }) {
     );
 }
 
-function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
+function StoreSettingsForm({ settings, onUpdate }: { settings: StoreSettings | null; onUpdate: () => void; }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
-    const router = useRouter();
     const [heroSlides, setHeroSlides] = useState<Partial<HeroSlide>[]>(settings?.hero_images || []);
     
     const fileToDataUri = (file: File): Promise<string> => {
@@ -291,66 +290,56 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
     const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setIsSubmitting(true);
+
         const form = event.currentTarget;
         const baseFormData = new FormData(form);
-
         const finalFormData = new FormData();
 
-        const heroImagesData = [];
-        for (let i = 0; i < heroSlides.length; i++) {
-            const imageFile = baseFormData.get(`heroImageFile_${i}`) as File;
-            let imageUrl = heroSlides[i].imageUrl || ''; // Start with existing or empty
+        try {
+            const heroImagesData = await Promise.all(heroSlides.map(async (slide, i) => {
+                const imageFile = baseFormData.get(`heroImageFile_${i}`) as File;
+                let imageUrl = slide.imageUrl || ''; 
 
-            if (imageFile && imageFile.size > 0) {
-                try {
+                if (imageFile && imageFile.size > 0) {
                     imageUrl = await fileToDataUri(imageFile);
-                } catch (error) {
-                    toast({ title: "Error de Archivo", description: `No se pudo procesar la imagen para el slide ${i+1}.`, variant: "destructive" });
-                    setIsSubmitting(false);
-                    return;
                 }
-            }
+                
+                return {
+                    id: slide.id || `new_${Date.now()}_${i}`,
+                    headline: baseFormData.get(`heroHeadline_${i}`) as string,
+                    subheadline: baseFormData.get(`heroSubheadline_${i}`) as string,
+                    buttonText: baseFormData.get(`heroButtonText_${i}`) as string,
+                    imageUrl: imageUrl,
+                };
+            }));
             
-            heroImagesData.push({
-                id: heroSlides[i].id || `new_${Date.now()}_${i}`,
-                headline: baseFormData.get(`heroHeadline_${i}`) as string,
-                subheadline: baseFormData.get(`heroSubheadline_${i}`) as string,
-                buttonText: baseFormData.get(`heroButtonText_${i}`) as string,
-                imageUrl: imageUrl,
+            finalFormData.append('heroImages', JSON.stringify(heroImagesData));
+            
+            const otherFields = [
+                'featuredCollectionTitle', 'featuredCollectionDescription', 'promoSectionTitle', 
+                'promoSectionDescription', 'promoSectionVideoUrl', 'phone', 'contactEmail', 
+                'twitterUrl', 'instagramUrl', 'facebookUrl', 'notificationsEnabled'
+            ];
+            otherFields.forEach(field => {
+                const value = baseFormData.get(field);
+                if (value !== null) {
+                    finalFormData.append(field, value);
+                }
             });
+
+            const result = await updateStoreSettings(finalFormData);
+
+            if (result.success) {
+                toast({ title: "Éxito", description: "La configuración se ha guardado." });
+                onUpdate();
+            } else {
+                toast({ title: "Error", description: result.error, variant: "destructive" });
+            }
+        } catch (error) {
+            toast({ title: "Error de Archivo", description: `No se pudo procesar una de las imágenes.`, variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
         }
-        
-        finalFormData.append('heroImages', JSON.stringify(heroImagesData));
-        finalFormData.append('featuredCollectionTitle', baseFormData.get('featuredCollectionTitle') as string);
-        finalFormData.append('featuredCollectionDescription', baseFormData.get('featuredCollectionDescription') as string);
-        finalFormData.append('promoSectionTitle', baseFormData.get('promoSectionTitle') as string);
-        finalFormData.append('promoSectionDescription', baseFormData.get('promoSectionDescription') as string);
-        finalFormData.append('promoSectionVideoUrl', baseFormData.get('promoSectionVideoUrl') as string);
-        finalFormData.append('phone', baseFormData.get('phone') as string);
-        finalFormData.append('contactEmail', baseFormData.get('contactEmail') as string);
-        finalFormData.append('twitterUrl', baseFormData.get('twitterUrl') as string);
-        finalFormData.append('instagramUrl', baseFormData.get('instagramUrl') as string);
-        finalFormData.append('facebookUrl', baseFormData.get('facebookUrl') as string);
-        // We handle notificationsEnabled separately
-        finalFormData.append('notificationsEnabled', settings?.notifications_enabled ? 'on' : 'off');
-
-
-        const result = await updateStoreSettings(finalFormData);
-
-        if (result.success) {
-            toast({
-                title: "Éxito",
-                description: "La configuración de la tienda se ha guardado correctamente.",
-            });
-            router.refresh();
-        } else {
-            toast({
-                title: "Error",
-                description: result.error || "No se pudo guardar la configuración.",
-                variant: "destructive",
-            });
-        }
-        setIsSubmitting(false);
     };
 
     const handleAddSlide = () => {
@@ -413,14 +402,12 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="featuredCollectionTitle">Título de la Sección</Label>
-                        <Input name="featuredCollectionTitle" defaultValue={settings?.featured_collection_title} placeholder="COLECCIÓN ROYAL SERIES" required />
-                         <p className="text-sm text-muted-foreground">El título sobre la cuadrícula de productos destacados.</p>
+                        <Label htmlFor="featuredCollectionTitle">Título</Label>
+                        <Input name="featuredCollectionTitle" defaultValue={settings?.featured_collection_title} required />
                     </div>
                      <div className="grid gap-2">
-                        <Label htmlFor="featuredCollectionDescription">Descripción de la Colección</Label>
-                        <Textarea name="featuredCollectionDescription" defaultValue={settings?.featured_collection_description} placeholder="La Royal Series ofrece una gama de relojes..." />
-                         <p className="text-sm text-muted-foreground">Un texto descriptivo para la colección destacada.</p>
+                        <Label htmlFor="featuredCollectionDescription">Descripción</Label>
+                        <Textarea name="featuredCollectionDescription" defaultValue={settings?.featured_collection_description} />
                     </div>
                 </CardContent>
             </Card>
@@ -428,21 +415,19 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
             <Card>
                 <CardHeader>
                     <CardTitle>Sección Promocional con Video</CardTitle>
-                    <CardDescription>Configura la sección con un video de YouTube y texto descriptivo.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                      <div className="grid gap-2">
-                        <Label htmlFor="promoSectionTitle">Título de la Sección Promo</Label>
-                        <Input name="promoSectionTitle" defaultValue={settings?.promo_section_title} placeholder="ROYAL DELUXE" />
+                        <Label htmlFor="promoSectionTitle">Título</Label>
+                        <Input name="promoSectionTitle" defaultValue={settings?.promo_section_title} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="promoSectionDescription">Descripción de la Sección Promo</Label>
-                        <Textarea name="promoSectionDescription" defaultValue={settings?.promo_section_description} placeholder="Descubre la elegancia y la innovación..." />
+                        <Label htmlFor="promoSectionDescription">Descripción</Label>
+                        <Textarea name="promoSectionDescription" defaultValue={settings?.promo_section_description} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="promoSectionVideoUrl">URL del Video de YouTube (Embed)</Label>
-                        <Input name="promoSectionVideoUrl" defaultValue={settings?.promo_section_video_url} placeholder="https://www.youtube.com/embed/VIDEO_ID" />
-                        <p className="text-sm text-muted-foreground">Importante: Usa la URL para "Embed" (Insertar), no la URL normal del video.</p>
+                        <Input name="promoSectionVideoUrl" defaultValue={settings?.promo_section_video_url} />
                     </div>
                 </CardContent>
             </Card>
@@ -450,15 +435,14 @@ function StoreSettingsForm({ settings }: { settings: StoreSettings | null }) {
             <Card>
                 <CardHeader>
                     <CardTitle>Información de Contacto y Redes Sociales</CardTitle>
-                    <CardDescription>Configura los datos de contacto y enlaces que aparecen en el pie de página.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                      <div className="grid gap-2">
-                        <Label htmlFor="phone">Teléfono de Contacto</Label>
+                        <Label htmlFor="phone">Teléfono</Label>
                         <Input name="phone" defaultValue={settings?.phone} />
                     </div>
                      <div className="grid gap-2">
-                        <Label htmlFor="contactEmail">Email de Contacto</Label>
+                        <Label htmlFor="contactEmail">Email</Label>
                         <Input name="contactEmail" type="email" defaultValue={settings?.contact_email} />
                     </div>
                     <div className="grid gap-2">
@@ -680,27 +664,30 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
     
     const handleNotificationToggle = async (checked: boolean) => {
         const formData = new FormData();
-        // This time we only need to send the single value that's changing.
         formData.append('notificationsEnabled', checked ? 'on' : 'off');
-        // We must also send the existing data to not lose it
-        const currentSettings = await fetchStoreSettings() || {};
-        Object.entries(currentSettings).forEach(([key, value]) => {
-            if (key !== 'notifications_enabled') { // Exclude the one we are setting
-                 if (key === 'hero_images') {
-                    formData.append(key, JSON.stringify(value));
-                } else if (value !== null && value !== undefined) {
-                    formData.append(key, String(value));
+        
+        // Populate the rest of the form data to prevent losing existing settings
+        if (settings) {
+            Object.entries(settings).forEach(([key, value]) => {
+                const keyAs = key as keyof StoreSettings;
+                if (keyAs !== 'notifications_enabled') {
+                    if (keyAs === 'hero_images' && value) {
+                        formData.append(key, JSON.stringify(value));
+                    } else if (value !== null && value !== undefined) {
+                        const formKey = Object.keys(defaultSettingsMap).find(k => defaultSettingsMap[k] === key) || key
+                        formData.append(formKey, String(value));
+                    }
                 }
-            }
-        });
+            });
+        }
         
         const result = await updateStoreSettings(formData);
-         if (result.success) {
+        if (result.success) {
             toast({
                 title: "Éxito",
                 description: `Notificaciones ${checked ? 'habilitadas' : 'deshabilitadas'}.`,
             });
-            onSettingsChange(); // Refresh settings in parent
+            onSettingsChange(); 
         } else {
             toast({
                 title: "Error",
@@ -709,28 +696,43 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
             });
         }
     };
+    
+    const defaultSettingsMap: { [key: string]: string } = {
+        'featuredCollectionTitle': 'featured_collection_title',
+        'featuredCollectionDescription': 'featured_collection_description',
+        'promoSectionTitle': 'promo_section_title',
+        'promoSectionDescription': 'promo_section_description',
+        'promoSectionVideoUrl': 'promo_section_video_url',
+        'phone': 'phone',
+        'contactEmail': 'contact_email',
+        'twitterUrl': 'twitter_url',
+        'instagramUrl': 'instagram_url',
+        'facebookUrl': 'facebook_url',
+    };
+    
 
     return (
         <div className="grid gap-4 md:grid-cols-2">
             <Card>
                 <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                     <div>
-                        <CardTitle className="text-sm font-medium">Enviar Notificación Personalizada</CardTitle>
+                        <CardTitle className="text-sm font-medium">Notificaciones Globales</CardTitle>
                         <CardDescription className="text-xs pt-1">Anuncia ofertas, lanzamientos y más.</CardDescription>
                     </div>
-                    <BellRing className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <form ref={notificationFormRef} onSubmit={handleNotificationSubmit} className="flex flex-col gap-4">
-                        <div className="flex items-center space-x-2 pt-4">
+                     <form>
+                        <div className="flex items-center space-x-2">
                             <Switch 
                                 id="notificationsEnabledToggle" 
+                                name="notificationsEnabled"
                                 checked={settings?.notifications_enabled}
                                 onCheckedChange={handleNotificationToggle}
-                            />
-                            <Label htmlFor="notificationsEnabledToggle">Habilitar notificaciones en el sitio</Label>
+                                />
+                            <Label htmlFor="notificationsEnabledToggle">Habilitadas</Label>
                         </div>
-                        <Separator />
+                    </form>
+                </CardHeader>
+                <CardContent>
+                    <form ref={notificationFormRef} onSubmit={handleNotificationSubmit} className="flex flex-col gap-4 pt-4 border-t">
                         <div className="grid gap-2">
                             <Label htmlFor="title">Título</Label>
                             <Input id="title" name="title" placeholder="¡Nuevo Lanzamiento!" required />
@@ -747,9 +749,12 @@ function OverviewTab({ products, settings, onSettingsChange }: { products: Produ
                             <Label htmlFor="link_url">URL del Enlace (Opcional)</Label>
                             <Input id="link_url" name="link_url" placeholder="https://your-store.com/sale" />
                         </div>
-                        <Button type="submit" disabled={isSendingNotification} className="w-full">
+                        <Button type="submit" disabled={isSendingNotification || !settings?.notifications_enabled} className="w-full">
                             {isSendingNotification ? 'Enviando...' : 'Enviar Notificación'}
                         </Button>
+                         {!settings?.notifications_enabled && (
+                            <p className="text-xs text-center text-muted-foreground">Las notificaciones están deshabilitadas. Actívalas para poder enviar.</p>
+                        )}
                     </form>
                 </CardContent>
             </Card>
@@ -1067,7 +1072,7 @@ function AdminsTab({ admins, onSearch, query }: { admins: Admin[], onSearch: (te
     );
 }
 
-function SettingsTab({ settings }: { settings: StoreSettings | null }) {
+function SettingsTab({ settings, onUpdate }: { settings: StoreSettings | null, onUpdate: () => void }) {
     return (
         <Card>
             <CardHeader>
@@ -1075,7 +1080,7 @@ function SettingsTab({ settings }: { settings: StoreSettings | null }) {
                 <CardDescription>Modifica la información que se muestra en la página principal y el pie de página.</CardDescription>
             </CardHeader>
             <CardContent>
-                <StoreSettingsForm settings={settings} />
+                <StoreSettingsForm settings={settings} onUpdate={onUpdate} />
             </CardContent>
         </Card>
     );
@@ -1090,23 +1095,36 @@ function DevelopersTab() {
                     <CardDescription>Conoce a las personas detrás de la magia.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
-                    <Card className="flex flex-col items-center p-8 text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
-                  <Avatar className="h-32 w-32 mb-6">
-                      <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
-                      <AvatarFallback>JD</AvatarFallback>
-                  </Avatar>
-                  
-                  <h1 className="text-2xl font-semibold">Luis Miguel Fonce</h1>
-                  
-                  <p className="text-primary/80">Lead Full-Stack Developer</p>
-                  <p className="mt-4 text-sm text-muted-foreground flex-grow">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
-                  <div className="flex gap-4 mt-6">
-                      <Link href="https://api.whatsapp.com/send/?phone=573044065668&text=%C2%A1Hola,+Me+interesa+tu+trabajo+amigo" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-6 w-6" /></Link>
-                      <Link href="https://www.instagram.com/miguel_1068l/" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-6 w-6" /></Link>
-                      <Link href="https://www.facebook.com/luismiguel.fonceguaitero?locale=es_LA" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-6 w-6" /></Link>
-                      <Link href="https://github.com/MIGUEL6-BNX" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-6 w-6" /></Link>
-                  </div>
-              </Card>
+                    <Card className="flex flex-col items-center p-6 text-center">
+                        <Avatar className="h-24 w-24 mb-4">
+                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 1" />
+                            <AvatarFallback>JD</AvatarFallback>
+                        </Avatar>
+                        <h3 className="text-lg font-semibold">Juan Developer</h3>
+                        <p className="text-muted-foreground">Lead Full-Stack Developer</p>
+                        <p className="mt-2 text-sm text-center">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
+                        <div className="flex gap-4 mt-4">
+                            <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
+                        </div>
+                    </Card>
+                    <Card className="flex flex-col items-center p-6 text-center">
+                        <Avatar className="h-24 w-24 mb-4">
+                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 2" />
+                            <AvatarFallback>AI</AvatarFallback>
+                        </Avatar>
+                        <h3 className="text-lg font-semibold">Ana Interfaz</h3>
+                        <p className="text-muted-foreground">UI/UX Designer</p>
+                        <p className="mt-2 text-sm text-center">Diseñando interfaces intuitivas y estéticamente agradables que mejoran la interacción del usuario.</p>
+                            <div className="flex gap-4 mt-4">
+                            <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
+                            <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
+                        </div>
+                    </Card>
                 </CardContent>
             </Card>
             <Card>
@@ -1289,3 +1307,4 @@ function StoreFormDialog({ isOpen, onClose, onSubmitSuccess, store }: { isOpen: 
 
   
 
+    

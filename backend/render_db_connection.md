@@ -22,9 +22,9 @@ En la configuración del servicio (`Settings` > `Build & Deploy`), asegúrate de
 
 - **Start Command (Comando de Inicio)**:
   ```bash
-  gunicorn --worker-tmp-dir /dev/shm -b 0.0.0.0:$PORT -w 4 --limit-request-body 16777216 app:app
+  gunicorn --worker-tmp-dir /dev/shm app:app
   ```
-  _Este es el comando que inicia tu servidor de producción Gunicorn y lo mantiene activo. Se ejecuta DESPUÉS del comando de construcción. La bandera `--limit-request-body` aumenta el límite de tamaño de las peticiones a 16MB para evitar errores al subir imágenes._
+  _Este es el comando que inicia tu servidor de producción Gunicorn y lo mantiene activo. Se ejecuta DESPUÉS del comando de construcción. El límite de tamaño de las peticiones ahora se gestiona dentro del código de Flask (`app.py`), que es el enfoque correcto._
 
 ## 3. Configuración de Variables de Entorno
 
