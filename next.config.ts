@@ -24,10 +24,6 @@ const nextConfig: NextConfig = {
           source: '/api/:path*',
           destination: 'http://127.0.0.1:5000/api/:path*',
         },
-         {
-          source: '/uploads/:path*',
-          destination: 'http://127.0.0.1:5000/uploads/:path*',
-        },
       ];
     }
     // En producción, usamos la URL completa del backend de Render.
@@ -35,10 +31,6 @@ const nextConfig: NextConfig = {
       {
         source: '/api/:path*',
         destination: `${backendUrl}/api/:path*`,
-      },
-       {
-        source: '/uploads/:path*',
-        destination: `${backendUrl}/uploads/:path*`,
       },
     ];
   },
@@ -48,14 +40,10 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'placehold.co',
       },
-      // Añade el nombre de host de tu servicio backend de Render aquí
-      // Por ejemplo, si la URL de tu servicio es https://mi-backend-123.onrender.com
-      // el nombre de host sería 'mi-backend-123.onrender.com'
       {
         protocol: 'https',
         hostname: '*.onrender.com',
       },
-
       {
         protocol: 'https',
         hostname: 'th.bing.com',
@@ -70,17 +58,29 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'encrypted-tbn2.gstatic.com',
+        hostname: 'cdn.pixabay.com',
       },
-      {protocol: 'https',
-       hostname: 'cdn.pixabay.com'
+      {
+        protocol: 'https',
+        hostname: 'www.gravatar.com',
       },
-      
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname:'i.pinimg.com'
+      }
     ],
+    // Permitir Data URIs
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   experimental: {
     serverActions: {
-        bodySizeLimit: '30mb',
+        bodySizeLimit: '10mb',
     },
   },
 };
