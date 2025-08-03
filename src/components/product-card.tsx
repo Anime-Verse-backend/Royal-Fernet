@@ -27,16 +27,16 @@ export function ProductCard({ product }: ProductCardProps) {
   const imageSrc = getSafeImageUrl(product.images?.[0]);
 
   return (
-    <Card className="w-full h-full overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 flex flex-col">
+    <Card className="group w-full h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-2 flex flex-col">
       <Link href={`/product/${product.id}`} className="block flex-grow">
-        <CardHeader className="p-0 relative">
+        <CardHeader className="p-0 relative overflow-hidden">
           <div className="aspect-square w-full relative">
             <Image
               src={imageSrc}
               alt={product.name}
               data-ai-hint="watch product"
               fill
-              className="object-cover"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
             />
           </div>

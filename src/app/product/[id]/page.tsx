@@ -19,6 +19,7 @@ import { AddToCartButton } from '@/components/add-to-cart-button';
 import { formatCurrency, getSafeImageUrl } from '@/lib/utils';
 import { Facebook, Twitter } from 'lucide-react';
 import ProductDetailLoading from './loading';
+import { cn } from '@/lib/utils';
 
 const PinterestIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -30,6 +31,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = React.useState<string>('');
+  const [isImageLoading, setIsImageLoading] = useState(true);
   const [pageUrl, setPageUrl] = React.useState('');
 
   useEffect(() => {
@@ -48,6 +50,10 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     getProduct();
     setPageUrl(window.location.href);
   }, [params.id]);
+
+  useEffect(() => {
+    setIsImageLoading(true);
+  }, [selectedImage]);
 
   if (loading || !product) {
     return <ProductDetailLoading />;
@@ -77,7 +83,11 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                         alt={`${product.name} main image`}
                         data-ai-hint="watch detail"
                         fill
-                        className="object-cover transition-opacity duration-300"
+                        className={cn(
+                            "object-cover transition-opacity duration-300",
+                            isImageLoading ? 'opacity-0' : 'opacity-100'
+                        )}
+                        onLoad={() => setIsImageLoading(false)}
                         sizes="(max-width: 768px) 100vw, 50vw"
                     />
                 </div>
@@ -85,8 +95,8 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                 {imagesToShow.slice(0, 5).map((img, index) => (
                     <button
                         key={index}
-                        onClick={() => setSelectedImage(img)}
-                        className={`aspect-square relative w-full rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary ring-offset-2 ring-offset-background transition-all duration-200 ${selectedImage === img ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'}`}
+                        onClick={() => setSelectedImage(getSafeImageUrl(img, '800x800'))}
+                        className={`aspect-square relative w-full rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary ring-offset-2 ring-offset-background transition-all duration-200 ${selectedImage.includes(img) ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'}`}
                     >
                         <Image
                             src={img}

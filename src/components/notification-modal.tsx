@@ -18,9 +18,11 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
 import { getSafeImageUrl } from '@/lib/utils';
-import { PartyPopper } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Check, Star, Clock, ArrowRight } from 'lucide-react';
 
 
 export function NotificationModal() {
@@ -54,33 +56,56 @@ export function NotificationModal() {
     <Dialog open={isOpen} onOpenChange={handleDismiss}>
        <DialogContent className="sm:max-w-md p-0 overflow-hidden">
         {notification.image_url && (
-          <div className="relative aspect-video w-full">
-            <Image
-              src={safeImageUrl}
-              alt="Notification image"
-              data-ai-hint="announcement promotion"
-              fill
-              className="object-cover"
-            />
-          </div>
+            <div className="relative aspect-video w-full">
+                <Image
+                src={safeImageUrl}
+                alt="Notification image"
+                data-ai-hint="announcement promotion"
+                fill
+                className="object-cover"
+                />
+                <Badge variant="secondary" className="absolute top-3 left-3 animate-pulse">NUEVO</Badge>
+            </div>
         )}
-        <DialogHeader className="p-6 pb-2 text-center items-center space-y-4">
-          <PartyPopper className="h-10 w-10 text-primary" />
-          <DialogTitle className="text-2xl font-headline">{notification.title || '¡Un Anuncio Especial!'}</DialogTitle>
-          <DialogDescription className="text-base text-muted-foreground pt-2">
-            {notification.message}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter className="p-6 pt-4 sm:justify-center gap-2 w-full flex-col-reverse sm:flex-row">
-            <Button type="button" variant="secondary" onClick={handleDismiss} className="w-full sm:w-auto">
-                Cerrar
-            </Button>
-            {notification.link_url && (
-                <Button asChild className="w-full sm:w-auto">
-                  <a href={notification.link_url} target="_blank" rel="noopener noreferrer">Ver más</a>
-                </Button>
-            )}
-        </DialogFooter>
+        <div className="p-6 text-center">
+            <DialogHeader className="mb-4">
+                <DialogTitle className="text-2xl font-headline">{notification.title || '¡Un Anuncio Especial!'}</DialogTitle>
+                <DialogDescription className="text-base text-muted-foreground pt-2">
+                    {notification.message}
+                </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex justify-around items-center my-6 py-4 border-y">
+                <div className="flex flex-col items-center gap-2">
+                    <Check className="h-6 w-6 text-green-500" />
+                    <span className="text-xs font-medium">Seguro</span>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                    <Star className="h-6 w-6 text-yellow-500" />
+                    <span className="text-xs font-medium">Premium</span>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                    <Clock className="h-6 w-6 text-blue-500" />
+                    <span className="text-xs font-medium">Rápido</span>
+                </div>
+            </div>
+
+            <DialogFooter className="sm:justify-center gap-2 w-full flex-col sm:flex-row">
+                <DialogClose asChild>
+                    <Button type="button" variant="ghost" className="w-full sm:w-auto">
+                        Ahora no
+                    </Button>
+                </DialogClose>
+                {notification.link_url && (
+                    <Button asChild className="w-full sm:w-auto">
+                    <a href={notification.link_url} target="_blank" rel="noopener noreferrer">
+                        Continuar
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                    </a>
+                    </Button>
+                )}
+            </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -32,7 +32,7 @@ export function TestimonialsSection() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {testimonials.map((testimonial, index) => (
-                        <Card key={index} className="bg-background/50 p-6 flex flex-col items-center text-center">
+                        <Card key={index} className="bg-background/50 p-6 flex flex-col items-center text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
                             <CardContent className="flex-grow">
                                 <p className="italic">"{testimonial.quote}"</p>
                             </CardContent>

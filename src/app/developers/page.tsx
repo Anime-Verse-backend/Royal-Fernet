@@ -21,7 +21,7 @@ export default function DevelopersPage() {
       <div className="container mx-auto py-16 px-4 sm:py-24 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
               <h1 className="text-4xl font-bold font-headline tracking-tight sm:text-5xl lg:text-6xl">Nuestro Equipo</h1>
-              <p className="mt-4 text-xl text-muted-foreground">Conoce a las personas que hacen posible PEPS.</p>
+              <p className="mt-4 text-xl text-muted-foreground">Conoce a las personas que hacen posible Royal-Fernet.</p>
           </div>
           <div className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
               <Card className="flex flex-col items-center p-8 text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
