@@ -27,7 +27,7 @@ export default function DevelopersPage() {
               <Card className="flex flex-col items-center p-8 text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
                   <Avatar className="h-32 w-32 mb-6">
                       <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
-                      <AvatarFallback>JD</AvatarFallback>
+                      <AvatarFallback>LM</AvatarFallback>
                   </Avatar>
                   
                   <h1 className="text-2xl font-semibold">Luis Miguel Fonce</h1>

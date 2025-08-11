@@ -393,7 +393,7 @@ def handle_stores():
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'POST':
                 data = request.form
-                image_url = '' # Start with empty image
+                image_url = data.get('imageUrl', '') # Default to empty or provided URL
                 if 'imageFile' in request.files and request.files['imageFile'].filename:
                     file = request.files['imageFile']
                     data_uri = file_to_data_uri(file)
@@ -424,10 +424,10 @@ def handle_store(store_id):
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             if request.method == 'PUT':
                 data = request.form
-                cursor.execute("SELECT image_url FROM store_locations WHERE id = %s", (store_id,))
-                current_image_res = cursor.fetchone()
-                image_url = current_image_res['image_url'] if current_image_res else ''
+                # Start with the provided imageUrl, which could be the existing one
+                image_url = data.get('imageUrl', '')
 
+                # If a new file is uploaded, it takes precedence
                 if 'imageFile' in request.files and request.files['imageFile'].filename:
                     file = request.files['imageFile']
                     data_uri = file_to_data_uri(file)
@@ -619,5 +619,7 @@ def get_table_content(table_name):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
+    
 
     

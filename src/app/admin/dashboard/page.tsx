@@ -1083,32 +1083,17 @@ function DevelopersTab() {
                 <CardContent className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
                     <Card className="flex flex-col items-center p-6 text-center">
                         <Avatar className="h-24 w-24 mb-4">
-                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 1" />
-                            <AvatarFallback>JD</AvatarFallback>
+                            <AvatarImage src="https://i.pinimg.com/736x/14/d8/98/14d8985abd22eb6005b1262ba6de08a6.jpg" data-ai-hint="person portrait" alt="Developer 1" />
+                            <AvatarFallback>LM</AvatarFallback>
                         </Avatar>
-                        <h3 className="text-lg font-semibold">Juan Developer</h3>
+                        <h3 className="text-lg font-semibold">Luis Miguel Fonce</h3>
                         <p className="text-muted-foreground">Lead Full-Stack Developer</p>
                         <p className="mt-2 text-sm text-center">Apasionado por crear experiencias de usuario fluidas y eficientes desde el frontend hasta el backend.</p>
                         <div className="flex gap-4 mt-4">
-                            <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
-                            <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
-                            <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
-                            <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
-                        </div>
-                    </Card>
-                    <Card className="flex flex-col items-center p-6 text-center">
-                        <Avatar className="h-24 w-24 mb-4">
-                            <AvatarImage src="https://placehold.co/150x150.png" data-ai-hint="person portrait" alt="Developer 2" />
-                            <AvatarFallback>AI</AvatarFallback>
-                        </Avatar>
-                        <h3 className="text-lg font-semibold">Ana Interfaz</h3>
-                        <p className="text-muted-foreground">UI/UX Designer</p>
-                        <p className="mt-2 text-sm text-center">Diseñando interfaces intuitivas y estéticamente agradables que mejoran la interacción del usuario.</p>
-                            <div className="flex gap-4 mt-4">
-                            <Link href="#" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-5 w-5" /></Link>
-                            <Link href="#" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-5 w-5" /></Link>
-                            <Link href="#" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-5 w-5" /></Link>
-                            <Link href="#" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-5 w-5" /></Link>
+                            <Link href="https://api.whatsapp.com/send/?phone=573044065668&text=%C2%A1Hola,+Me+interesa+tu+trabajo+amigo" aria-label="WhatsApp" className="text-muted-foreground hover:text-primary"><WhatsappIcon className="h-6 w-6" /></Link>
+                            <Link href="https://www.instagram.com/miguel_1068l/" aria-label="Instagram Profile" className="text-muted-foreground hover:text-primary"><Instagram className="h-6 w-6" /></Link>
+                            <Link href="https://www.facebook.com/luismiguel.fonceguaitero?locale=es_LA" aria-label="Facebook Profile" className="text-muted-foreground hover:text-primary"><Facebook className="h-6 w-6" /></Link>
+                            <Link href="https://github.com/MIGUEL6-BNX" aria-label="Github Profile" className="text-muted-foreground hover:text-primary"><Github className="h-6 w-6" /></Link>
                         </div>
                     </Card>
                 </CardContent>
@@ -1166,12 +1151,13 @@ function StoresTab() {
         setEditingStore(null);
     };
 
-    const handleFormSubmit = () => {
+    const handleFormSubmit = async () => {
         handleCloseDialog();
-        loadStores();
+        await loadStores(); // Ensure we wait for stores to reload
         toast({ title: "Éxito", description: `Tienda ${editingStore ? 'actualizada' : 'creada'} correctamente.` });
         revalidatePath('/stores');
     };
+    
 
     return (
         <Card>
@@ -1239,6 +1225,11 @@ function StoreFormDialog({ isOpen, onClose, onSubmitSuccess, store }: { isOpen: 
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
         
+        // Pass the existing image URL if we are editing
+        if (store && store.image_url) {
+            formData.append('imageUrl', store.image_url);
+        }
+
         const url = store ? `/api/stores/${store.id}` : '/api/stores';
         const method = store ? 'PUT' : 'POST';
 
@@ -1283,8 +1274,29 @@ function StoreFormDialog({ isOpen, onClose, onSubmitSuccess, store }: { isOpen: 
                         <Textarea id="mapEmbedUrl" name="mapEmbedUrl" defaultValue={store?.map_embed_url} required />
                     </div>
                      <div className="grid gap-2">
-                        <Label htmlFor="imageFile">Imagen de la Tienda</Label>
-                         <Input id="imageFile" name="imageFile" type="file" accept="image/*" />
+                        <Label>Imagen de la Tienda</Label>
+                        <Tabs defaultValue={store?.image_url && !store?.image_url.startsWith('data:') ? 'url' : 'upload'} className="w-full">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="url">URL</TabsTrigger>
+                                <TabsTrigger value="upload">Subir Archivo</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="url">
+                                <Input 
+                                    name="imageUrl" 
+                                    placeholder="https://example.com/image.png" 
+                                    defaultValue={store?.image_url || ''} 
+                                />
+                            </TabsContent>
+                            <TabsContent value="upload">
+                                <Input name="imageFile" type="file" accept="image/*" />
+                            </TabsContent>
+                        </Tabs>
+                         {store?.image_url && (
+                             <div className="mt-2">
+                                 <p className="text-sm text-muted-foreground">Imagen actual:</p>
+                                 <Image src={getSafeImageUrl(store.image_url)} alt="preview" width={128} height={72} className="h-16 w-auto rounded-md object-cover mt-1" />
+                             </div>
+                         )}
                     </div>
                     <DialogFooter>
                         <DialogClose asChild><Button type="button" variant="secondary">Cancelar</Button></DialogClose>
@@ -1295,3 +1307,4 @@ function StoreFormDialog({ isOpen, onClose, onSubmitSuccess, store }: { isOpen: 
         </Dialog>
     );
 }
+    
