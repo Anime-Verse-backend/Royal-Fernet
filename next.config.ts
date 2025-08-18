@@ -67,7 +67,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'res.cloudinary.com/'
+        hostname: 'res.cloudinary.com'
       }
     ],
     // Permitir Data URIs
