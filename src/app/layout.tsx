@@ -22,6 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={cn(montserrat.variable)} suppressHydrationWarning>
+      <link rel="icon" href="code-svgrepo-com.svg" type="image/x-icon"></link>
       <head>
         <title>Royal-Fernet</title>
         <meta name="description" content="Discover our collection of luxury watches. Timeless elegance and precision craftsmanship." />
