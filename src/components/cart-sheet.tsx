@@ -38,7 +38,7 @@ export function CartSheet() {
     // AQUÍ: Reemplaza con tu número de WhatsApp real (incluyendo el código de país).
     // EJEMPLO: 573001234567 (para Colombia)
     // =================================================================
-    const phoneNumber = "YOUR_WHATSAPP_NUMBER_HERE"; 
+    const phoneNumber = "573242934538"; 
     
     let message = "¡Hola! Quisiera hacer un pedido de los siguientes artículos:\n\n";
     
